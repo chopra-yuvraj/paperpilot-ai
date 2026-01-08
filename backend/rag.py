@@ -9,9 +9,13 @@ FALLBACK_MODEL = "microsoft/Phi-3.5-mini-instruct"
 
 class RAGController:
     def __init__(self):
-        # Must use token with provider
-        token = os.getenv("HF_TOKEN")
-        self.client = InferenceClient(api_key=token)
+        # We don't initialize a single client anymore, we do it per call if needed
+        # or we could keep a default one. 
+        self.token = os.getenv("HF_TOKEN")
+
+    def _get_client(self, provider=None):
+        """Factory to get client with provider"""
+        return InferenceClient(api_key=self.token, provider=provider)
 
     def generate_response(self, context_chunks: List[dict], query: str, mode: str = "explain") -> str:
         # 1. Prepare Context
@@ -52,20 +56,29 @@ class RAGController:
         try:
             return self._call_model(PRIMARY_MODEL, messages, provider="together")
         except Exception as e:
-            print(f"Primary model failed: {e}. Trying fallback...")
+            print(f"Primary model failed: {e}. Trying fallback to Phi-3.5...")
             try:
+                # Phi-3.5 is also on together, or we can try without provider (serverless default)
+                # Let's try explicit together provider first for Phi-3.5 as well
                 return self._call_model(FALLBACK_MODEL, messages, provider="together")
             except Exception as e2:
-                return f"Error: Both models failed. {e2}"
+                # If that fails, try generic serverless (no provider arg)
+                try:
+                     print(f"Fallback failed: {e2}. Trying generic serverless...")
+                     return self._call_model(FALLBACK_MODEL, messages, provider=None)
+                except Exception as e3:
+                    return f"Error: All AI models unavailable. {e3}"
 
     def _call_model(self, model_id, messages, provider):
         """Helper to call HF Inference API with a specific provider"""
-        response = self.client.chat.completions.create(
+        client = self._get_client(provider)
+        
+        response = client.chat.completions.create(
             model=model_id,
             messages=messages,
-            max_tokens=2048, # Increased per spec
-            temperature=0.3, # Low temp per spec
-            provider=provider
+            max_tokens=2048,
+            temperature=0.3, 
+            stream=False
         )
         return response.choices[0].message.content
 
