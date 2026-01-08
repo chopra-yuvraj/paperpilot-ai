@@ -1,86 +1,85 @@
-# 📑 PaperPilot -> AI Research Paper Explainer & Critic
+# PaperPilot AI - Intelligent Research Assistant
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.95%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Hugging Face](https://img.shields.io/badge/Hugging_Face-Powered-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/)
+[![JavaScript](https://img.shields.io/badge/Vanilla_JS-ES6%2B-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-PaperPilot is a "Research Copilot" web application that helps students understand complex technical papers. It parses PDFs, segments them into logical sections, provides simplified explanations, and critiques the content using an AI pipeline.
+---
 
-## 🚀 Features
+## Why PaperPilot AI?
+As a **B.Tech CSE student at VIT** and **B.S. Data Science student at IIT Madras**, I realized that understanding complex research papers is a barrier for many students and researchers.
+This project bridges the gap between **academic density** and **accessible knowledge**. It uses advanced Retrieval-Augmented Generation (RAG) to not just summarize, but *explain* and *critique* papers section-by-section using a modern, "Glassmorphism" UI.
 
-- **Section-Aware Analysis**: Automatically splits papers into Abstract, Introduction, Methods, etc.
-- **Simplified Explanations**: "Explain Like I'm 5" mode for complex math and theories.
-- **AI Critic**: Identifies assumptions, weaknesses, and potential improvements (Critic Mode).
-- **RAG Pipeline**: Retrieves relevant context from the paper to answer questions grounded in facts.
-- **Free Tech Stack**: Uses open-source Mistral-7B via HuggingFace Inference API (No paid keys required).
+### Key Features
+- **Smart Sectioning** - Automatically parses PDF research papers and breaks them down into logical sections (Abstract, Methodology, Experiments).
+- **Context-Aware RAG** - Uses vector embeddings (FAISS) to ground every answer in the specific text of the paper.
+- **AI Critic** - A dedicated "Critic" agent that identifies weak assumptions, missing citations, and potential methodological flaws.
+- **"Glass" Aesthetic** - A premium, dark-mode interface with frosted glass effects and smooth transitions.
+- **Free-Tier Optimized** - Engineered to run efficiently on low-memory environments (512MB RAM) using API-based inference.
 
-## 🛠️ Tech Stack
+---
 
-**Backend**
-- Python 3.9+
-- **FastAPI**: High-performance API server.
-- **PyPDF2/pdfplumber**: PDF text extraction.
-- **SentenceTransformers**: `all-MiniLM-L6-v2` for embeddings.
-- **FAISS**: Vector database for efficient retrieval.
-- **HuggingFace Hub**: LLM Inference.
+### Application Interaction
+| Feature | Action | Experience |
+|---------|--------|------------|
+| **Paper Upload** | Drag & Drop PDF | System parses structure, indexing content into vector space in seconds. |
+| **Section Deep Dive** | Click any Section | The AI "reads" that specific section and explains it in simple terms. |
+| **Critical Analysis** | "Critique" Button | The AI switches modes to become a reviewer, highlighting flaws and gaps. |
+| **Interactive Q&A** | Ask a Question | RAG pipeline retrieves relevant chunks and synthesizes a grounded answer. |
 
-**Frontend**
-- Plain HTML5, CSS3, Vanilla JavaScript.
-- Clean, academic-style UI.
+### Engineering Highlights
+- **Backend**: Built on **FastAPI** for high-performance, asynchronous request handling.
+- **AI Engine**: Leverages **Hugging Face Inference API** (Mistral-7B / MiniLM) for embeddings and generation without local hardware overhead.
+- **Vector DB**: **FAISS** (Facebook AI Similarity Search) for millisecond-latency semantic retrieval.
+- **Frontend**: Pure **HTML5/CSS3/JS** with no heavy frameworks, focusing on performance and raw DOM manipulation.
 
-## 📦 Installation
+---
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/chopra-yuvraj/paperpilot-ai
-    cd paperpilot-ai
-    ```
+## Future Enhancements
+Ideas for the next version:
+- [ ] **Multi-Paper Chat** - Synthesize answers across multiple uploaded papers.
+- [ ] **Citation Graph** - Visualize how the paper connects to other works.
+- [ ] **Audio Overview** - Generate a podcast-style summary of the paper.
+- [ ] **Highlighting** - Interactive text highlighting in the original PDF view.
+- [ ] **User Accounts** - Save research libraries and chat history.
 
-2.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+---
 
-3.  **Environment Setup**:
-    - (Optional) detailed critique works better with a HuggingFace Token.
-    - Set `HF_TOKEN` in your environment variables if you hit rate limits.
+## License
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for full details.
 
-## 🏃‍♂️ Usage
+---
 
-1.  **Run the Server**:
-    ```bash
-    uvicorn backend.main:app --reload
-    ```
+## Acknowledgments
+Special recognition to:
+- **My professors at VIT Vellore** for the strong foundational knowledge.
+- **IIT Madras Data Science** curriculum for the deep dive into ML algorithms.
+- **Hugging Face** for democratizing access to state-of-the-art models.
 
-2.  **Open the App**:
-    - Go to `http://localhost:8000` in your browser.
+---
 
-3.  **Upload & Analyze**:
-    - Upload a research paper (PDF).
-    - Click on sections to read them and see AI explanations.
-    - Use the Chat panel to ask specific questions.
+## About the Developer
 
-## 📁 Project Structure
+**Yuvraj Chopra**  
+*B.Tech Computer Science Engineering - VIT Vellore*  
+*B.S. Data Science - IIT Madras*  
+Vellore, Tamil Nadu, India
 
-```
-/paperpilot-ai
-├── backend/
-│   ├── main.py          # FastAPI Entry Point
-│   ├── pdf_parser.py    # Text Extraction
-│   ├── sectioner.py     # Content Segmentation
-│   ├── embeddings.py    # Vector Search Engine
-│   ├── rag.py           # LLM Pipeline
-│   └── critic.py        # Critique Logic
-├── frontend/
-│   ├── index.html       # UI Layout
-│   ├── style.css        # Styling
-│   └── script.js        # Logic & Fetch calls
-├── data/
-│   └── papers/          # Uploaded files
-└── requirements.txt
-```
+*Passionate about building AI tools that make knowledge more accessible. Currently exploring the intersection of Generative AI and Education.*
 
-## ⚠️ Notes & Limitations
-- **Free API Limits**: The default HuggingFace Inference API may rate limit usage. For production, add a pro token or swap the LLM endpoint.
-- **Parsing**: Complex layouts (two-column) are handled by `pdfplumber`, but very old headers might need regex tuning.
+### Connect With Me
 
-## 🔮 Future Improvements
-- **Knowledge Graph Visualization**: Visual node-link diagram of concepts.
-- **Citation Graph**: Automatic extraction of references.
-- **Local LLM Support**: Run LLaMA-2 locally with `llama.cpp` for offline privacy.
+[![GitHub](https://img.shields.io/badge/GitHub-chopra--yuvraj-181717?style=for-the-badge&logo=github)](https://github.com/chopra-yuvraj)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-chopra--yuvraj-0A66C2?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/chopra-yuvraj)
+[![Email](https://img.shields.io/badge/Email-yuvrajchopra19%40gmail.com-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:yuvrajchopra19@gmail.com)
+
+---
+
+<div align="center">
+
+**Made with ❤️ and ☕ by Yuvraj Chopra**
+
+[ **View on GitHub**](https://github.com/chopra-yuvraj/paperpilot-ai)
+
+</div>
