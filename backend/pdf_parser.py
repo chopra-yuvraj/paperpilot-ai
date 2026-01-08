@@ -1,5 +1,6 @@
 import json
 import re
+import pdfplumber
 
 def parse_json_response(response_text):
     # Extract JSON blob between { and } if model adds extra text
