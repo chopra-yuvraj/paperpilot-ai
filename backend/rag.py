@@ -1,11 +1,50 @@
 import os
 from huggingface_hub import InferenceClient
-from typing import List
+from typing import List, Union, Any
 from fastapi import HTTPException
+import json
+import re
 
 # Registry from spec
 PRIMARY_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+
+SYSTEM_PROMPT_CRITIQUE = """
+You are an academic peer reviewer. Your task is to analyze research methodologies critically.
+You must output your response in valid JSON format ONLY. Do not add any introductory or concluding text.
+
+Use this exact JSON structure:
+{
+  "summary": "A concise 2-3 sentence summary of the methodology.",
+  "strengths": [
+    "Point 1",
+    "Point 2"
+  ],
+  "weaknesses": [
+    {
+      "point": "Name of the weakness (e.g., 'Data Leakage')",
+      "description": "Explanation of why this is a flaw."
+    }
+  ],
+  "suggestions": [
+    "Actionable suggestion 1",
+    "Actionable suggestion 2"
+  ]
+}
+"""
+
+def parse_json_response(response_text):
+    # Extract JSON blob between { and } if model adds extra text
+    try:
+        match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            return json.loads(json_str)
+        else:
+            return {"error": "Failed to parse JSON", "raw_text": response_text}
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON format", "raw_text": response_text}
+
 
 class RAGController:
     def __init__(self):
@@ -17,7 +56,7 @@ class RAGController:
         """Factory to get client with provider"""
         return InferenceClient(api_key=self.token, provider=provider)
 
-    def generate_response(self, context_chunks: List[dict], query: str, mode: str = "explain") -> str:
+    def generate_response(self, context_chunks: List[dict], query: str, mode: str = "explain"):
         # 1. Prepare Context
         context_text = ""
         for c in context_chunks:
@@ -35,12 +74,8 @@ class RAGController:
             
         elif mode == "critique":
             # Scenario B: Methodology Critique (The "Reviewer")
-            system_prompt = (
-                "You are a critical peer reviewer for a top-tier CS conference. Analyze the provided methodology "
-                "strictly. Identify potential data leakage, weak baselines, or unstated assumptions. "
-                "Structure your response as: 1. Summary of Approach, 2. Strengths, 3. Critical Flaws/Weaknesses."
-            )
-            user_prompt = f"Context:\n{context_text}\n\nTask: Critique the methodology in this text."
+            system_prompt = SYSTEM_PROMPT_CRITIQUE
+            user_prompt = f"Analyze the following methodology section:\n\n\"{context_text}\"\n\nProvide the critique in the required JSON format."
             
         else:
             # Fallback/General
@@ -53,13 +88,45 @@ class RAGController:
         ]
         
         # 3. Execute with Provider Routing & Fallback
+        response_text = self._execute_model_chain(messages)
+        
+        if mode == "critique":
+            json_response = parse_json_response(response_text)
+            return self._format_critique_to_markdown(json_response)
+        return response_text
+
+    def _format_critique_to_markdown(self, data: Union[dict, Any]) -> str:
+        """Converts the JSON critique logic into a readable Markdown report."""
+        if "error" in data:
+            return f"**Error parsing critique:** {data['error']}\n\nRaw output:\n```\n{data.get('raw_text', '')}\n```"
+
+        md_output = f"### Critique Summary\n{data.get('summary', 'No summary provided.')}\n\n"
+        
+        md_output += "#### Strengths\n"
+        for strength in data.get('strengths', []):
+            md_output += f"- {strength}\n"
+        md_output += "\n"
+
+        md_output += "#### Weaknesses\n"
+        for weakness in data.get('weaknesses', []):
+            point = weakness.get('point', 'General')
+            desc = weakness.get('description', '')
+            md_output += f"- **{point}**: {desc}\n"
+        md_output += "\n"
+
+        md_output += "#### Suggestions\n"
+        for suggestion in data.get('suggestions', []):
+            md_output += f"- {suggestion}\n"
+            
+        return md_output
+
+    def _execute_model_chain(self, messages):
         try:
             return self._call_model(PRIMARY_MODEL, messages, provider="together")
         except Exception as e:
             print(f"Primary model failed: {e}. Trying fallback to Qwen...")
             try:
-                # Phi-3.5 is also on together, or we can try without provider (serverless default)
-                # Let's try explicit together provider first for Phi-3.5 as well
+                # Fallback to Qwen on Together
                 return self._call_model(FALLBACK_MODEL, messages, provider="together")
             except Exception as e2:
                 # If that fails, try generic serverless (no provider arg)
