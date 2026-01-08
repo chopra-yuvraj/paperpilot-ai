@@ -1,36 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Research Copilot</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
 
     <div class="app-container">
-        
+
         <!-- Sidebar: Paper Sections -->
         <aside class="sidebar">
             <div class="logo-area">
                 <h2>📑 PaperPilot</h2>
                 <div id="file-status" class="status-empty">No paper loaded</div>
             </div>
-            
+
             <button id="upload-btn" class="primary-btn">Upload PDF</button>
             <input type="file" id="file-input" accept=".pdf" hidden>
-            
+
             <div class="sections-list" id="sections-list">
                 <!-- Sections will be injected here -->
                 <div class="placeholder-msg">Upload a paper to see sections.</div>
+            </div>
+
+            <div class="sidebar-footer">
+                Built by Yuvraj Chopra
             </div>
         </aside>
 
         <!-- Main Content Area -->
         <main class="main-content">
-            
+
             <!-- Section Reader View -->
             <section class="reader-view" id="reader-view">
                 <div class="section-header">
@@ -39,7 +47,7 @@
                         <!-- Badges like 'Methodology', 'Introduction' -->
                     </div>
                 </div>
-                
+
                 <div class="content-body" id="section-content">
                     <p>Select a section from the sidebar to read it.</p>
                 </div>
@@ -47,7 +55,7 @@
                 <div class="analysis-panel hidden" id="analysis-panel">
                     <h3>💡 AI Explanation</h3>
                     <div id="ai-explanation" class="ai-box loading-text">Generate explanation...</div>
-                    
+
                     <h3>🧐 Critique & Weaknesses</h3>
                     <div id="ai-critique" class="ai-box"></div>
                 </div>
@@ -59,10 +67,12 @@
                     <h3>Research Assistant</h3>
                 </div>
                 <div class="chat-history" id="chat-history">
-                    <div class="msg bot">Hello! I can explain math, check assumptions, and summarize sections. Upload a paper to start.</div>
+                    <div class="msg bot">Hello! I can explain math, check assumptions, and summarize sections. Upload a
+                        paper to start.</div>
                 </div>
                 <div class="chat-input-area">
-                    <textarea id="chat-query" placeholder="Ask about this paper... (e.g. 'Explain equation 2')"></textarea>
+                    <textarea id="chat-query"
+                        placeholder="Ask about this paper... (e.g. 'Explain equation 2')"></textarea>
                     <button id="send-chat">➤</button>
                 </div>
             </section>
@@ -72,4 +82,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>
