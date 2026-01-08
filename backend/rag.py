@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 # Registry from spec
 PRIMARY_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
-FALLBACK_MODEL = "microsoft/Phi-3.5-mini-instruct"
+FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
 class RAGController:
     def __init__(self):
@@ -56,7 +56,7 @@ class RAGController:
         try:
             return self._call_model(PRIMARY_MODEL, messages, provider="together")
         except Exception as e:
-            print(f"Primary model failed: {e}. Trying fallback to Phi-3.5...")
+            print(f"Primary model failed: {e}. Trying fallback to Qwen...")
             try:
                 # Phi-3.5 is also on together, or we can try without provider (serverless default)
                 # Let's try explicit together provider first for Phi-3.5 as well
