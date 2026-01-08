@@ -3,7 +3,7 @@ from huggingface_hub import InferenceClient
 from typing import List
 
 # default model to use
-REPO_ID = "HuggingFaceH4/zephyr-7b-beta"
+REPO_ID = "microsoft/Phi-3.5-mini-instruct"
 
 class RAGController:
     def __init__(self):
