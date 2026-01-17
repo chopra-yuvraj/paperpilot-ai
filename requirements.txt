@@ -7,7 +7,7 @@ pdfplumber
 langchain-google-genai
 langchain-core
 langchain-community
-pinecone-client
+pinecone
 supabase
 sentence-transformers
 requests
