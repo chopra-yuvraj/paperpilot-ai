@@ -5,7 +5,7 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 class EmbeddingEngine:
-    def __init__(self, model_name="models/embedding-004"):
+    def __init__(self, model_name="models/text-embedding-004"):
         print(f"Setting up embeddings: {model_name}...")
         self.model_name = model_name
         
