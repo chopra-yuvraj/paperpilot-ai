@@ -1,4 +1,4 @@
-const API_BASE = "";
+const API_BASE = "https://paperpilot-backend-r7bh.onrender.com";
 
 // DOM Elements
 const uploadBtn = document.getElementById('upload-btn');
