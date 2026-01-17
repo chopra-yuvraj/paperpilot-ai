@@ -1,88 +1,109 @@
-from huggingface_hub import InferenceClient
-import faiss
-import numpy as np
 import os
 import time
+import uuid
+import numpy as np
+from pinecone import Pinecone, ServerlessSpec
+from sentence_transformers import SentenceTransformer
 
 class EmbeddingEngine:
     def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
         print(f"Setting up embeddings: {model_name}...")
         self.model_name = model_name
-        self.client = InferenceClient(model=model_name, token=os.getenv("HF_TOKEN"))
+        self.encoder = SentenceTransformer(model_name)
+        self.dimension = 384
         
-        # model dim is 384
-        self.dimension = 384 
-        self.index = faiss.IndexFlatL2(self.dimension)
-        self.metadata = [] 
+        # Pinecone setup
+        self.api_key = os.getenv("PINECONE_API_KEY")
+        if not self.api_key:
+            print("WARNING: PINECONE_API_KEY not found.")
+        
+        self.pc = Pinecone(api_key=self.api_key)
+        self.index_name = os.getenv("PINECONE_INDEX", "paperpilot-index")
+        
+        # Check if index exists, if not create it (Serverless)
+        # Note: In production, index creation usually happens outside app startup to save time/errors
+        # But for this setup we'll check gently
+        existing_indexes = [i.name for i in self.pc.list_indexes()]
+        if self.index_name not in existing_indexes:
+            try:
+                print(f"Creating Pinecone index: {self.index_name}")
+                self.pc.create_index(
+                    name=self.index_name,
+                    dimension=self.dimension,
+                    metric="cosine",
+                    spec=ServerlessSpec(
+                        cloud="aws",
+                        region=os.getenv("PINECONE_ENV", "us-east-1")
+                    )
+                )
+                # Wait for index to be ready
+                while not self.pc.describe_index(self.index_name).status['ready']:
+                    time.sleep(1)
+            except Exception as e:
+                print(f"Error creating index (might already exist or permission issue): {e}")
+
+        self.index = self.pc.Index(self.index_name)
 
     def _get_embedding(self, text):
-        # try 3 times incase api fails
-        for i in range(3):
-            try:
-                # get features
-                response = self.client.feature_extraction(text)
-                arr = np.array(response)
-                
-                # handle different shapes
-                if arr.ndim == 1:
-                    return arr
-                elif arr.ndim == 2:
-                    return np.mean(arr, axis=0)
-                elif arr.ndim == 3:
-                     return np.mean(arr[0], axis=0)
-                return arr
-            except Exception as e:
-                print(f"Retrying... {e}")
-                time.sleep(2)
-        
-        # return empty if failed
-        return np.zeros(self.dimension)
+        # Local embedding generation (CPU/Fast)
+        return self.encoder.encode(text).tolist()
 
-    def ingest_sections(self, sections):
-        # clear old index
-        self.index = faiss.IndexFlatL2(self.dimension)
-        self.metadata = []
-        
+    def ingest_sections(self, sections, filename="unknown"):
         if not sections:
             return
 
-        print(f"Processing {len(sections)} sections...")
+        print(f"Processing {len(sections)} sections for {filename}...")
         
         vectors = []
         for sec in sections:
-            # combine title and text
-            text = f"{sec['title']}: {sec['content']}"
+            title = sec.get('title', 'Untitled')
+            content = sec.get('content', '')
+            text = f"{title}: {content}"
             
-            # cut off if too long
-            if len(text) > 2000: 
-                text = text[:2000]
-                
-            emb = self._get_embedding(text)
-            vectors.append(emb)
-            self.metadata.append(sec)
+            # Truncate if necessary (though Pinecone metadata has limits, embedding handles long text by truncation usually)
+            # sentence-transformers usually truncates to 256/512 tokens automatically
             
-            # sleep a bit
-            time.sleep(0.2)
+            vector = self._get_embedding(text)
             
-        if vectors:
-            # add to faiss
-            matrix = np.array(vectors).astype('float32')
-            self.index.add(matrix)
-            print(f"Done. Indexed {len(vectors)} items.")
+            # Metadata for retrieval
+            # Keep metadata small for Pinecone performance
+            metadata = {
+                "title": title,
+                "content": content[:4000], # Limit content in metadata to avoid size errors (40KB max)
+                "filename": filename
+            }
+            
+            # Use unique ID
+            vec_id = str(uuid.uuid4())
+            vectors.append({
+                "id": vec_id,
+                "values": vector,
+                "metadata": metadata
+            })
+            
+        # Batch upsert
+        batch_size = 100
+        for i in range(0, len(vectors), batch_size):
+            batch = vectors[i:i+batch_size]
+            self.index.upsert(vectors=batch)
+            
+        print(f"Upserted {len(vectors)} vectors to Pinecone.")
 
-    def search(self, query, k=3):
-        # get query vector
+    def search(self, query, k=5):
         query_vec = self._get_embedding(query)
         
-        # search index
-        D, I = self.index.search(np.array([query_vec]).astype('float32'), k)
-        
-        results = []
-        for i, idx in enumerate(I[0]):
-            if idx != -1 and idx < len(self.metadata):
-                results.append(self.metadata[idx])
-        return results
-
-if __name__ == "__main__":
-    eng = EmbeddingEngine()
-
+        try:
+            results = self.index.query(
+                vector=query_vec,
+                top_k=k,
+                include_metadata=True
+            )
+            
+            matches = []
+            for match in results['matches']:
+                matches.append(match['metadata'])
+                
+            return matches
+        except Exception as e:
+            print(f"Search failed: {e}")
+            return []

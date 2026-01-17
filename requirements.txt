@@ -1,13 +1,13 @@
 fastapi
 uvicorn
 python-multipart
-pdfplumber
-# sentence-transformers - Removed for Free Tier (OOM)
-# scikit-learn - Removed for Free Tier
-# scipy - Removed for Free Tier
-faiss-cpu
-huggingface_hub>=0.33.2
+pydantic
 python-dotenv
+pdfplumber
+langchain-google-genai
+langchain-core
+langchain-community
+pinecone-client
+supabase
+sentence-transformers
 requests
-numpy
-jinja2

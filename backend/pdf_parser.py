@@ -1,6 +1,7 @@
 import json
 import re
 import pdfplumber
+import io
 
 def parse_json_response(response_text):
     # Extract JSON blob between { and } if model adds extra text
@@ -14,10 +15,19 @@ def parse_json_response(response_text):
     except json.JSONDecodeError:
         return {"error": "Invalid JSON format", "raw_text": response_text}
 
-def parse_pdf(file_path):
+def parse_pdf(file_input):
+    """
+    Parses PDF text.
+    file_input can be a file path (str) or a file-like object (bytes).
+    """
     text = ""
     try:
-        with pdfplumber.open(file_path) as pdf:
+        # Check if it's bytes or path
+        if isinstance(file_input, (bytes, io.BytesIO)):
+             # pdfplumber.open can take file objects
+             pass 
+        
+        with pdfplumber.open(file_input) as pdf:
             for page in pdf.pages:
                 t = page.extract_text()
                 if t:

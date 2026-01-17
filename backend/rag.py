@@ -1,13 +1,12 @@
 import os
-from huggingface_hub import InferenceClient
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 from typing import List, Union, Any
-from fastapi import HTTPException
 import json
 import re
 
-# Registry from spec
-PRIMARY_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
-FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+# Gemini Configuration
+MODEL_NAME = "gemini-1.5-flash"
 
 SYSTEM_PROMPT_CRITIQUE = """
 You are an academic peer reviewer. Your task is to analyze research methodologies critically.
@@ -34,69 +33,76 @@ Use this exact JSON structure:
 """
 
 def parse_json_response(response_text):
-    # Extract JSON blob between { and } if model adds extra text
     try:
         match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if match:
             json_str = match.group(0)
             return json.loads(json_str)
         else:
-            return {"error": "Failed to parse JSON", "raw_text": response_text}
+            # Try parsing raw if no brackets found (sometimes models just output json)
+            return json.loads(response_text)
     except json.JSONDecodeError:
         return {"error": "Invalid JSON format", "raw_text": response_text}
 
-
 class RAGController:
     def __init__(self):
-        # We don't initialize a single client anymore, we do it per call if needed
-        # or we could keep a default one. 
-        self.token = os.getenv("HF_TOKEN")
-
-    def _get_client(self, provider=None):
-        """Factory to get client with provider"""
-        return InferenceClient(api_key=self.token, provider=provider)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            print("WARNING: GEMINI_API_KEY not found.")
+            
+        self.llm = ChatGoogleGenerativeAI(
+            model=MODEL_NAME,
+            temperature=0.3,
+            max_tokens=2048,
+            google_api_key=api_key,
+            convert_system_message_to_human=True # Gemini sometimes prefers this
+        )
 
     def generate_response(self, context_chunks: List[dict], query: str, mode: str = "explain"):
         # 1. Prepare Context
         context_text = ""
         for c in context_chunks:
-            context_text += f"SECTION: {c['title']}\nCONTENT: {c['content']}\n\n"
+            title = c.get('title', 'Unknown Section')
+            content = c.get('content', '')
+            context_text += f"SECTION: {title}\nCONTENT: {content}\n\n"
         
-        # 2. Select Prompts based on spec scenarios
+        # 2. Select Prompts
         if mode == "explain":
-            # Scenario A: Simplification (The "Explainer")
-            system_prompt = (
+            system_instruction = (
                 "You are an expert academic tutor. Your goal is to explain complex research paper excerpts "
                 "to an undergraduate computer science student. Break down technical jargon, identify the "
                 "core logic, and use analogies where possible. Do not oversimplify the math, but explain it step-by-step."
             )
-            user_prompt = f"Context:\n{context_text}\n\nQuestion: {query}\n\nExplain this section based on the context."
+            user_content = f"Context:\n{context_text}\n\nQuestion: {query}\n\nExplain this section based strictly on the provided context. If the context is insufficient, state that you cannot answer."
             
         elif mode == "critique":
-            # Scenario B: Methodology Critique (The "Reviewer")
-            system_prompt = SYSTEM_PROMPT_CRITIQUE
-            user_prompt = f"Analyze the following methodology section:\n\n\"{context_text}\"\n\nProvide the critique in the required JSON format."
+            system_instruction = SYSTEM_PROMPT_CRITIQUE
+            user_content = f"Analyze the following methodology section:\n\n\"{context_text}\"\n\nProvide the critique in the required JSON format."
             
         else:
             # Fallback/General
-            system_prompt = "You are an expert AI Research Copilot."
-            user_prompt = f"Context:\n{context_text}\n\n{query}"
+            system_instruction = "You are an expert AI Research Copilot. Answer the question based ONLY on the provided context."
+            user_content = f"Context:\n{context_text}\n\nQuestion: {query}"
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            SystemMessage(content=system_instruction),
+            HumanMessage(content=user_content)
         ]
         
-        # 3. Execute with Provider Routing & Fallback
-        response_text = self._execute_model_chain(messages)
-        
-        if mode == "critique":
-            json_response = parse_json_response(response_text)
-            return self._format_critique_to_markdown(json_response)
-        return response_text
+        # 3. Execute
+        try:
+            response = self.llm.invoke(messages)
+            response_text = response.content
+            
+            if mode == "critique":
+                json_response = parse_json_response(response_text)
+                return self._format_critique_to_markdown(json_response)
+            
+            return response_text
+        except Exception as e:
+            return f"Error generating response: {str(e)}"
 
     def _format_critique_to_markdown(self, data: Union[dict, Any]) -> str:
-        """Converts the JSON critique logic into a readable Markdown report."""
         if "error" in data:
             return f"**Error parsing critique:** {data['error']}\n\nRaw output:\n```\n{data.get('raw_text', '')}\n```"
 
@@ -119,35 +125,3 @@ class RAGController:
             md_output += f"- {suggestion}\n"
             
         return md_output
-
-    def _execute_model_chain(self, messages):
-        try:
-            return self._call_model(PRIMARY_MODEL, messages, provider="together")
-        except Exception as e:
-            print(f"Primary model failed: {e}. Trying fallback to Qwen...")
-            try:
-                # Fallback to Qwen on Together
-                return self._call_model(FALLBACK_MODEL, messages, provider="together")
-            except Exception as e2:
-                # If that fails, try generic serverless (no provider arg)
-                try:
-                     print(f"Fallback failed: {e2}. Trying generic serverless...")
-                     return self._call_model(FALLBACK_MODEL, messages, provider=None)
-                except Exception as e3:
-                    return f"Error: All AI models unavailable. {e3}"
-
-    def _call_model(self, model_id, messages, provider):
-        """Helper to call HF Inference API with a specific provider"""
-        client = self._get_client(provider)
-        
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            max_tokens=2048,
-            temperature=0.3, 
-            stream=False
-        )
-        return response.choices[0].message.content
-
-if __name__ == "__main__":
-    pass

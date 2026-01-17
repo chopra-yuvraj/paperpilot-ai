@@ -19,28 +19,26 @@ const chatQuery = document.getElementById('chat-query');
 const sendChatBtn = document.getElementById('send-chat');
 const chatHistory = document.getElementById('chat-history');
 
-let currentSectionId = null;
+// State
+let appSections = [];
 
 // --- Helper: Typewriter Effect ---
-async function typeText(element, text, speed = 10) {
+function typeText(element, text, speed = 10) {
     element.textContent = "";
     element.classList.add('typing');
-
-    // Process markdown-like bolding if needed, but simple for now
-    // We will just type raw text or html? Let's type raw text then render HTML
-    // Ideally we type visible chars.
-
-    // For simplicity, we just type content directly. 
-    // If it has HTML tags, typing is harder. 
-    // We'll just type the whole block if it's markdown-ish.
-    // Actually, let's just do a simple interval.
-
     return new Promise(resolve => {
         let i = 0;
+        
+        // Handle undefined text
+        if (!text) {
+             element.classList.remove('typing');
+             resolve();
+             return;
+        }
+
         const interval = setInterval(() => {
             element.textContent += text.charAt(i);
             i++;
-            // Scroll to bottom if in chat
             if (element.classList.contains('msg')) {
                 chatHistory.scrollTop = chatHistory.scrollHeight;
             }
@@ -76,13 +74,25 @@ fileInput.addEventListener('change', async (e) => {
         if (!response.ok) throw new Error('Upload failed');
 
         const data = await response.json();
+        
+        // Save sections to state
+        appSections = data.sections || [];
+        
         fileStatus.textContent = data.filename;
         fileStatus.classList.remove('loading-text');
-        renderSections(data.sections);
+        
+        renderSections(appSections);
+        
+        // Open first section if available
+        if(appSections.length > 0) {
+            loadSection(0);
+        }
+        
     } catch (err) {
-        fileStatus.textContent = "Error uploading file.";
+        fileStatus.textContent = "Error uploading.";
         fileStatus.classList.remove('loading-text');
         console.error(err);
+        alert("Upload failed. Make sure backend is running and keys are set.");
     }
 });
 
@@ -92,72 +102,76 @@ function renderSections(sections) {
         const div = document.createElement('div');
         div.className = 'section-item';
         div.textContent = sec.title;
-        div.onclick = () => loadSection(sec.id);
+        div.onclick = () => loadSection(index);
+        div.dataset.index = index;
 
         // Stagger Animation
         div.style.animationDelay = `${index * 50}ms`;
-
         sectionsList.appendChild(div);
     });
 }
 
-async function loadSection(id) {
-    currentSectionId = id;
-
+async function loadSection(index) {
+    // UI Update
     document.querySelectorAll('.section-item').forEach(el => el.classList.remove('active'));
-    // Find active element logic can be improved later
+    const activeItem = document.querySelector(`.section-item[data-index='${index}']`);
+    if(activeItem) activeItem.classList.add('active');
 
-    try {
-        // Skeleton / Loading State
-        sectionTitle.classList.add('skeleton-text');
-        sectionContent.textContent = '';
-        sectionContent.classList.add('skeleton-text');
-        sectionContent.style.height = '200px';
+    const section = appSections[index];
+    if(!section) return;
 
-        const res = await fetch(`${API_BASE}/section/${id}`);
-        const data = await res.json();
+    // Reset Analysis Panel
+    analysisPanel.classList.add('hidden');
+    aiExplanation.textContent = '';
+    aiCritique.innerHTML = '';
 
-        // Reveal
-        sectionTitle.classList.remove('skeleton-text');
-        sectionContent.classList.remove('skeleton-text');
-        sectionContent.style.height = 'auto';
-
-        sectionTitle.textContent = data.title;
-        typeText(sectionContent, data.content, 1); // Fast typing for content
-
-        // AI Params
+    // Animate Content Transition
+    sectionContent.style.opacity = '0';
+    sectionTitle.style.opacity = '0';
+    
+    setTimeout(() => {
+        sectionTitle.textContent = section.title;
+        sectionContent.textContent = section.content;
+        sectionContent.style.opacity = '1';
+        sectionTitle.style.opacity = '1';
+        
+        // Trigger Explanation
         analysisPanel.classList.remove('hidden');
-        aiExplanation.className = 'ai-box skeleton-text';
-        aiExplanation.textContent = '';
-        aiCritique.innerHTML = '';
-
-        fetchExplanation(id);
-
-    } catch (err) {
-        console.error(err);
-    }
+        aiExplanation.textContent = 'Generating...';
+        aiExplanation.classList.add('loading-text');
+        
+        fetchExplanation(section.title, section.content);
+    }, 200);
 }
 
-async function fetchExplanation(id) {
+async function fetchExplanation(title, content) {
     try {
-        const res = await fetch(`${API_BASE}/explain_section`, {
+        // Send text to backend for explanation
+        const res = await fetch(`${API_BASE}/explain_text`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ section_id: id })
+            body: JSON.stringify({ 
+                text: content,
+                title: title
+            })
         });
+        
+        if(!res.ok) throw new Error("Explanation failed");
+        
         const data = await res.json();
 
-        aiExplanation.className = 'ai-box';
+        aiExplanation.classList.remove('loading-text');
+        
         // Type the explanation
-        await typeText(aiExplanation, data.explanation, 20);
+        await typeText(aiExplanation, data.explanation, 10);
 
-        // Render Critique (HTML) directly since it has structure
+        // Render Critique
         aiCritique.innerHTML = data.critique;
-        // Fade in critique
         aiCritique.style.animation = 'fadeIn 1s ease';
 
     } catch (err) {
-        aiExplanation.textContent = "Error generating explanation.";
+        aiExplanation.textContent = "Error: " + err.message;
+        aiExplanation.classList.remove('loading-text');
     }
 }
 
@@ -177,8 +191,7 @@ async function sendMessage() {
     appendMessage('user', text);
     chatQuery.value = '';
 
-    // Loading placeholder
-    const loadingId = appendMessage('bot', '...');
+    const loadingId = appendMessage('bot', 'Thinking...');
     const loadingEl = document.getElementById(loadingId);
     loadingEl.classList.add('loading-text');
 
@@ -187,22 +200,24 @@ async function sendMessage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: text,
-                section_id: currentSectionId
+                query: text
             })
         });
         const data = await res.json();
 
-        // Remove loading state
         loadingEl.classList.remove('loading-text');
-
-        const replyText = `${data.answer}\n\nSources: ${data.sources.join(', ')}`;
-
-        // Type out the response
-        await typeText(loadingEl, replyText, 30);
+        
+        // Format sources
+        let sourceText = "";
+        if (data.sources && data.sources.length > 0) {
+            sourceText = "\n\nSources: " + data.sources.join(', ');
+        }
+        
+        const fullReply = data.answer + sourceText;
+        await typeText(loadingEl, fullReply, 20);
 
     } catch (err) {
-        loadingEl.textContent = "Sorry, I encountered an error.";
+        loadingEl.textContent = "Error: " + err.message;
         loadingEl.classList.remove('loading-text');
     }
 }
@@ -215,11 +230,4 @@ function appendMessage(role, text) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
     div.id = `msg-${Date.now()}`;
     return div.id;
-}
-
-function updateMessage(id, text) {
-    const msg = document.getElementById(id);
-    if (msg) {
-        msg.textContent = text;
-    }
 }
