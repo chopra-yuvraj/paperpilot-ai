@@ -1,31 +1,51 @@
 import os
 import time
 import uuid
-import numpy as np
 from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 class EmbeddingEngine:
-    def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
+    def __init__(self, model_name="models/embedding-004"):
         print(f"Setting up embeddings: {model_name}...")
         self.model_name = model_name
-        self.encoder = SentenceTransformer(model_name)
-        self.dimension = 384
+        
+        # Google Gemini Embeddings setup
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        if not self.api_key:
+            print("WARNING: GEMINI_API_KEY not found. Embeddings will fail.")
+            
+        self.encoder = GoogleGenerativeAIEmbeddings(
+            model=model_name,
+            google_api_key=self.api_key
+        )
+        self.dimension = 768
         
         # Pinecone setup
-        self.api_key = os.getenv("PINECONE_API_KEY")
-        if not self.api_key:
-            print("WARNING: PINECONE_API_KEY not found.")
-        
-        self.pc = Pinecone(api_key=self.api_key)
+        self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
         self.index_name = os.getenv("PINECONE_INDEX", "paperpilot-index")
-        
-        # Check if index exists, if not create it (Serverless)
-        # Note: In production, index creation usually happens outside app startup to save time/errors
-        # But for this setup we'll check gently
-        existing_indexes = [i.name for i in self.pc.list_indexes()]
-        if self.index_name not in existing_indexes:
+        self.pc = None
+        self.index = None
+
+        if self.pinecone_api_key:
             try:
+                self.pc = Pinecone(api_key=self.pinecone_api_key)
+                self.index = self.pc.Index(self.index_name)
+            except Exception as e:
+                print(f"Pinecone client init failed (non-fatal for startup): {e}")
+        else:
+             print("WARNING: PINECONE_API_KEY not found.")
+
+    def ensure_index_exists(self):
+        """
+        Check if index exists and create if needed.
+        Note: This might still fail if the API key is invalid or permissions are missing.
+        """
+        if not self.pc:
+             return
+             
+        try:
+            existing_indexes = [i.name for i in self.pc.list_indexes()]
+            if self.index_name not in existing_indexes:
                 print(f"Creating Pinecone index: {self.index_name}")
                 self.pc.create_index(
                     name=self.index_name,
@@ -36,17 +56,12 @@ class EmbeddingEngine:
                         region=os.getenv("PINECONE_ENV", "us-east-1")
                     )
                 )
-                # Wait for index to be ready
-                while not self.pc.describe_index(self.index_name).status['ready']:
-                    time.sleep(1)
-            except Exception as e:
-                print(f"Error creating index (might already exist or permission issue): {e}")
-
-        self.index = self.pc.Index(self.index_name)
+        except Exception as e:
+            print(f"Index creation check failed: {e}")
 
     def _get_embedding(self, text):
-        # Local embedding generation (CPU/Fast)
-        return self.encoder.encode(text).tolist()
+        # Use Google Gemini API
+        return self.encoder.embed_query(text)
 
     def ingest_sections(self, sections, filename="unknown"):
         if not sections:

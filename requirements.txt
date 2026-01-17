@@ -9,5 +9,5 @@ langchain-core
 langchain-community
 pinecone
 supabase
-sentence-transformers
+google-generativeai
 requests

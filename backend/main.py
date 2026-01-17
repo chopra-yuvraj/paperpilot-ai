@@ -14,7 +14,39 @@ from backend.embeddings import EmbeddingEngine
 from backend.rag import RAGController
 from backend.supabase_client import supabase
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+
+# Global services
+embedder = None
+rag = None
+sectioner = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("Starting up application...")
+    global embedder, rag, sectioner
+    
+    try:
+        # Initialize services
+        # These operations might take time, but we see logs now.
+        embedder = EmbeddingEngine()
+        # We can trigger index check in background or just run it here since we removed the infinite wait
+        embedder.ensure_index_exists()
+        
+        rag = RAGController()
+        sectioner = Sectioner()
+        print("Startup complete. Services initialized.")
+    except Exception as e:
+        print(f"Startup failed: {e}")
+        # We might want to continue even if some services fail, or re-raise
+    
+    yield
+    
+    # Shutdown
+    print("Shutting down application...")
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,11 +55,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize Services
-embedder = EmbeddingEngine()
-rag = RAGController()
-sectioner = Sectioner()
 
 # Request Models
 class ChatRequest(BaseModel):
