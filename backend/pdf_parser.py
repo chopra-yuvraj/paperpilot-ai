@@ -1,32 +1,35 @@
-import json
-import re
+import io
+import logging
+
 import pdfplumber
 
-def parse_json_response(response_text):
-    # Extract JSON blob between { and } if model adds extra text
-    try:
-        match = re.search(r"\{.*\}", response_text, re.DOTALL)
-        if match:
-            json_str = match.group(0)
-            return json.loads(json_str)
-        else:
-            return {"error": "Failed to parse JSON", "raw_text": response_text}
-    except json.JSONDecodeError:
-        return {"error": "Invalid JSON format", "raw_text": response_text}
+logger = logging.getLogger(__name__)
 
-def parse_pdf(file_path):
+
+def parse_pdf(file_input) -> str:
+    """
+    Parses text content from a PDF file.
+
+    Args:
+        file_input: A file path (str) or a file-like object (io.BytesIO).
+
+    Returns:
+        Extracted text as a string, or empty string on failure.
+    """
     text = ""
     try:
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                t = page.extract_text()
-                if t:
-                    text += t + "\n"
-    except Exception as e:
-        print(f"Error reading PDF: {e}")
-        return ""
-        
-    return text
+        # Ensure BytesIO cursor is at the start
+        if isinstance(file_input, io.BytesIO):
+            file_input.seek(0)
 
-if __name__ == "__main__":
-    pass
+        with pdfplumber.open(file_input) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+
+    except Exception as e:
+        logger.error(f"Error reading PDF: {e}")
+        return ""
+
+    return text.strip()

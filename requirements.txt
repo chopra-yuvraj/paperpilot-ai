@@ -1,13 +1,25 @@
+# Core Framework
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
-pdfplumber
-# sentence-transformers - Removed for Free Tier (OOM)
-# scikit-learn - Removed for Free Tier
-# scipy - Removed for Free Tier
-faiss-cpu
-huggingface_hub>=0.33.2
+pydantic
+
+# Environment
 python-dotenv
+
+# PDF Processing
+pdfplumber
+
+# AI / LLM
+langchain-google-genai
+langchain-core
+google-generativeai
+
+# Vector Database
+pinecone
+
+# Storage (Optional)
+supabase
+
+# HTTP
 requests
-numpy
-jinja2
