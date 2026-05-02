@@ -4,82 +4,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Research Copilot</title>
-    <link rel="stylesheet" href="style.css">
+    <title>PaperPilot AI — Intelligent Research Copilot</title>
+    <meta name="description"
+        content="PaperPilot AI is an intelligent research assistant that explains, critiques, and answers questions about academic papers using advanced AI.">
+    <meta name="theme-color" content="#0f0f1a">
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap"
         rel="stylesheet">
+
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for XSS sanitization -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+    <!-- Animated background -->
+    <div class="bg-mesh" aria-hidden="true">
+        <div class="mesh-orb mesh-orb--1"></div>
+        <div class="mesh-orb mesh-orb--2"></div>
+        <div class="mesh-orb mesh-orb--3"></div>
+    </div>
 
-    <div class="app-container">
+    <div class="app-container" id="app-container">
 
-        <!-- Sidebar: Paper Sections -->
-        <aside class="sidebar">
-            <div class="logo-area">
-                <h2>📑 PaperPilot</h2>
-                <p class="brand-subtitle">AI Research Copilot</p>
-                <div id="file-status" class="status-empty">No paper loaded</div>
-            </div>
-
-            <button id="upload-btn" class="primary-btn">Upload PDF</button>
-            <input type="file" id="file-input" accept=".pdf" hidden>
-
-            <div class="sections-list" id="sections-list">
-                <!-- Sections will be injected here -->
-                <div class="placeholder-msg">Upload a paper to see sections.</div>
-            </div>
-
-            <div class="sidebar-footer">
-                Built by Yuvraj Chopra
-            </div>
-        </aside>
-
-        <!-- Main Content Area -->
-        <main class="main-content">
-
-            <!-- Section Reader View -->
-            <section class="reader-view" id="reader-view">
-                <div class="section-header">
-                    <h1 id="section-title">Welcome</h1>
-                    <div class="badges" id="section-badges">
-                        <!-- Badges like 'Methodology', 'Introduction' -->
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-inner">
+                <!-- Logo -->
+                <div class="logo-area" id="logo-area">
+                    <div class="logo-icon">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <defs>
+                                <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
+                                    <stop offset="0%" stop-color="#818cf8" />
+                                    <stop offset="100%" stop-color="#6366f1" />
+                                </linearGradient>
+                            </defs>
+                            <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
+                            <path d="M10 8h12v2H10V8zm0 4h12v2H10v-2zm0 4h8v2H10v-2zm0 4h10v2H10v-2z"
+                                fill="rgba(255,255,255,0.9)" />
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>PaperPilot</h1>
+                        <span class="logo-badge">AI Research Copilot</span>
                     </div>
                 </div>
 
-                <div class="content-body" id="section-content">
-                    <p>Select a section from the sidebar to read it.</p>
+                <!-- File Status -->
+                <div class="file-status-area">
+                    <div id="file-status" class="file-status file-status--empty">
+                        <svg class="file-status-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path
+                                d="M3.5 2A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14h9a1.5 1.5 0 001.5-1.5V6.621a1.5 1.5 0 00-.44-1.06L10.94 2.94A1.5 1.5 0 009.878 2.5H3.5z" />
+                        </svg>
+                        <span id="file-status-text">No paper loaded</span>
+                    </div>
                 </div>
 
-                <div class="analysis-panel hidden" id="analysis-panel">
-                    <h3>💡 AI Explanation</h3>
-                    <div id="ai-explanation" class="ai-box loading-text">Generate explanation...</div>
+                <!-- Upload -->
+                <button id="upload-btn" class="upload-btn">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Upload PDF
+                </button>
+                <input type="file" id="file-input" accept=".pdf" hidden>
 
-                    <h3>🧐 Critique & Weaknesses</h3>
-                    <div id="ai-critique" class="ai-box"></div>
+                <!-- Sections List -->
+                <nav class="sections-nav" id="sections-nav">
+                    <div class="sections-label">Paper Sections</div>
+                    <div class="sections-list" id="sections-list">
+                        <div class="placeholder-msg" id="placeholder-msg">
+                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor"
+                                stroke-width="1.5">
+                                <rect x="8" y="6" width="32" height="36" rx="4" />
+                                <line x1="14" y1="14" x2="34" y2="14" />
+                                <line x1="14" y1="20" x2="34" y2="20" />
+                                <line x1="14" y1="26" x2="28" y2="26" />
+                                <line x1="14" y1="32" x2="30" y2="32" />
+                            </svg>
+                            <span>Upload a research paper to see its sections</span>
+                        </div>
+                    </div>
+                </nav>
+
+                <!-- Sidebar Footer -->
+                <div class="sidebar-footer" id="sidebar-footer">
+                    <span>Built by <strong>Yuvraj Chopra</strong></span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Sidebar Toggle -->
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+        </button>
+
+        <!-- Main Content -->
+        <main class="main-content" id="main-content">
+
+            <!-- Reader Panel -->
+            <section class="reader-panel" id="reader-panel">
+                <div class="reader-scroll" id="reader-scroll">
+
+                    <!-- Welcome State -->
+                    <div class="welcome-state" id="welcome-state">
+                        <div class="welcome-icon">
+                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                                <defs>
+                                    <linearGradient id="welcome-grad" x1="0" y1="0" x2="80" y2="80">
+                                        <stop offset="0%" stop-color="#818cf8" />
+                                        <stop offset="50%" stop-color="#6366f1" />
+                                        <stop offset="100%" stop-color="#4f46e5" />
+                                    </linearGradient>
+                                </defs>
+                                <rect width="80" height="80" rx="20" fill="url(#welcome-grad)" opacity="0.15" />
+                                <path
+                                    d="M24 18h32a4 4 0 014 4v36a4 4 0 01-4 4H24a4 4 0 01-4-4V22a4 4 0 014-4zm6 12h20m-20 6h20m-20 6h14m-14 6h16"
+                                    stroke="url(#welcome-grad)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+                            </svg>
+                        </div>
+                        <h2>Welcome to PaperPilot</h2>
+                        <p>Upload a research paper to get AI-powered explanations, critiques, and answers.</p>
+                        <div class="welcome-features">
+                            <div class="welcome-feature">
+                                <span class="feature-icon">📖</span>
+                                <span>Smart Sectioning</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">🧠</span>
+                                <span>AI Explanations</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">🔍</span>
+                                <span>Critical Analysis</span>
+                            </div>
+                            <div class="welcome-feature">
+                                <span class="feature-icon">💬</span>
+                                <span>Interactive Q&A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Reading View (hidden initially) -->
+                    <div class="reading-view hidden" id="reading-view">
+                        <div class="section-header" id="section-header">
+                            <div class="section-number" id="section-number"></div>
+                            <h2 id="section-title"></h2>
+                        </div>
+
+                        <article class="section-body" id="section-content"></article>
+
+                        <!-- AI Analysis -->
+                        <div class="analysis-panel hidden" id="analysis-panel">
+                            <!-- Explanation Card -->
+                            <div class="analysis-card" id="explanation-card">
+                                <div class="analysis-card-header">
+                                    <div class="analysis-card-icon analysis-card-icon--explain">
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd"
+                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                                clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <h3>AI Explanation</h3>
+                                </div>
+                                <div class="analysis-card-body" id="ai-explanation">
+                                    <div class="skeleton-block">
+                                        <div class="skeleton-line skeleton-line--full"></div>
+                                        <div class="skeleton-line skeleton-line--80"></div>
+                                        <div class="skeleton-line skeleton-line--60"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Critique Card -->
+                            <div class="analysis-card" id="critique-card">
+                                <div class="analysis-card-header">
+                                    <div class="analysis-card-icon analysis-card-icon--critique">
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd"
+                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
+                                                clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <h3>Critique &amp; Analysis</h3>
+                                </div>
+                                <div class="analysis-card-body markdown-body" id="ai-critique"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <!-- Chat / Assistant Panel -->
-            <section class="chat-panel">
-                <div class="chat-header">
-                    <h3>Research Assistant</h3>
+            <!-- Chat Panel -->
+            <section class="chat-panel" id="chat-panel">
+                <div class="chat-header" id="chat-header">
+                    <div class="chat-header-left">
+                        <div class="chat-avatar">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Research Assistant</h3>
+                            <span class="chat-status" id="chat-status">Ready</span>
+                        </div>
+                    </div>
+                    <button class="chat-toggle-btn" id="chat-toggle-btn" aria-label="Toggle chat panel">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                clip-rule="evenodd" />
+                        </svg>
+                    </button>
                 </div>
+
                 <div class="chat-history" id="chat-history">
-                    <div class="msg bot">Hello! I can explain math, check assumptions, and summarize sections. Upload a
-                        paper to start.</div>
+                    <div class="msg msg--bot" id="welcome-msg">
+                        <div class="msg-avatar">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path
+                                    d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 4.5a1 1 0 11-2 0 1 1 0 012 0zM6.5 7A.5.5 0 017 6.5h1a.5.5 0 01.5.5v3.5a.5.5 0 01-1 0V7.5H7a.5.5 0 01-.5-.5z" />
+                            </svg>
+                        </div>
+                        <div class="msg-content">
+                            <p>Hello! I'm your AI research assistant. I can explain equations, check assumptions, and
+                                answer questions about your paper. <strong>Upload a PDF to get started.</strong></p>
+                        </div>
+                    </div>
                 </div>
-                <div class="chat-input-area">
-                    <textarea id="chat-query"
-                        placeholder="Ask about this paper... (e.g. 'Explain equation 2')"></textarea>
-                    <button id="send-chat">➤</button>
+
+                <div class="chat-input-area" id="chat-input-area">
+                    <div class="chat-input-wrapper">
+                        <textarea id="chat-query" placeholder="Ask about this paper..."
+                            rows="1"></textarea>
+                        <button id="send-chat" aria-label="Send message">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path
+                                    d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </section>
 
         </main>
     </div>
+
+    <!-- Upload Progress Overlay -->
+    <div class="upload-overlay hidden" id="upload-overlay">
+        <div class="upload-modal">
+            <div class="upload-spinner">
+                <svg width="48" height="48" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(99,102,241,0.2)" stroke-width="4" />
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="#6366f1" stroke-width="4"
+                        stroke-dasharray="31.4 94.2" stroke-linecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 24 24" to="360 24 24"
+                            dur="1s" repeatCount="indefinite" />
+                    </circle>
+                </svg>
+            </div>
+            <h3 id="upload-status-title">Processing Paper</h3>
+            <p id="upload-status-detail">Parsing PDF and extracting sections...</p>
+            <div class="upload-progress-bar">
+                <div class="upload-progress-fill" id="upload-progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
 
     <script src="script.js"></script>
 </body>
