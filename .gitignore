@@ -179,3 +179,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .env.example
+.env

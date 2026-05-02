@@ -1,13 +1,25 @@
+# Core Framework
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 pydantic
+
+# Environment
 python-dotenv
+
+# PDF Processing
 pdfplumber
+
+# AI / LLM
 langchain-google-genai
 langchain-core
-langchain-community
-pinecone
-supabase
 google-generativeai
+
+# Vector Database
+pinecone
+
+# Storage (Optional)
+supabase
+
+# HTTP
 requests
