@@ -10,13 +10,14 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
-    { "src": "/upload", "dest": "/api/index.py" },
-    { "src": "/ask", "dest": "/api/index.py" },
-    { "src": "/explain_text", "dest": "/api/index.py" },
-    { "src": "/health", "dest": "/api/index.py" },
-    { "src": "/style.css", "dest": "/frontend/style.css" },
-    { "src": "/script.js", "dest": "/frontend/script.js" },
-    { "src": "/(.*)", "dest": "/frontend/index.html" }
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/frontend/$1"
+    }
   ]
 }

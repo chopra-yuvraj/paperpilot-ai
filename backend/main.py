@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # Load environment variables BEFORE any module that reads them
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -93,7 +93,7 @@ class TextExplainRequest(BaseModel):
 
 # --- Health Check ---
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     return {
         "status": "ok",
@@ -107,10 +107,9 @@ async def health_check():
 
 # --- API Endpoints ---
 
-@app.post("/upload")
+@app.post("/api/upload")
 async def upload_paper(
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Upload and process a PDF research paper."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -147,8 +146,8 @@ async def upload_paper(
                 detail="No recognizable sections found in the paper.",
             )
 
-        # 4. Ingest into Pinecone (background)
-        background_tasks.add_task(embedder.ingest_sections, sections, file.filename)
+        # 4. Ingest into Pinecone (Must be synchronous on Vercel as background tasks freeze)
+        embedder.ingest_sections(sections, filename=file.filename)
 
         # 5. Return sections
         return {
@@ -168,7 +167,7 @@ async def upload_paper(
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
-@app.post("/ask")
+@app.post("/api/ask")
 async def ask_question(req: ChatRequest):
     """Ask a question about uploaded papers using RAG."""
     if not req.query.strip():
@@ -197,7 +196,7 @@ async def ask_question(req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/explain_text")
+@app.post("/api/explain_text")
 async def explain_text_endpoint(req: TextExplainRequest):
     """Explain and critique a specific section of text."""
     if not req.text.strip():

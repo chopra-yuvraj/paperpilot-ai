@@ -118,7 +118,7 @@ fileInput.addEventListener("change", async (e) => {
     try {
         uploadStatusDetail.textContent = "Parsing PDF and extracting sections...";
 
-        const response = await fetch(`${API_BASE}/upload`, {
+        const response = await fetch(`${API_BASE}/api/upload`, {
             method: "POST",
             body: formData,
         });
@@ -217,7 +217,7 @@ async function loadSection(index) {
 // === Fetch AI Explanation ===
 async function fetchExplanation(title, content) {
     try {
-        const res = await fetch(`${API_BASE}/explain_text`, {
+        const res = await fetch(`${API_BASE}/api/explain_text`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: content, title: title }),
@@ -277,7 +277,7 @@ async function sendMessage() {
     contentEl.innerHTML = '<span class="loading-text" style="color:var(--text-muted)">Analyzing your question...</span>';
 
     try {
-        const res = await fetch(`${API_BASE}/ask`, {
+        const res = await fetch(`${API_BASE}/api/ask`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query: text }),
