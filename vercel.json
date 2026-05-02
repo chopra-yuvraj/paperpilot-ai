@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend/main.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
     },
     {
@@ -11,13 +11,12 @@
     }
   ],
   "routes": [
-    {
-      "src": "/(upload|ask|explain_text|health)",
-      "dest": "/backend/main.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/$1"
-    }
+    { "src": "/upload", "dest": "/api/index.py" },
+    { "src": "/ask", "dest": "/api/index.py" },
+    { "src": "/explain_text", "dest": "/api/index.py" },
+    { "src": "/health", "dest": "/api/index.py" },
+    { "src": "/style.css", "dest": "/frontend/style.css" },
+    { "src": "/script.js", "dest": "/frontend/script.js" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
   ]
 }
