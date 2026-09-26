@@ -80,6 +80,20 @@
                 </button>
                 <input type="file" id="file-input" accept=".pdf" hidden>
 
+                <!-- Model Selector -->
+                <div class="model-selector">
+                    <label for="model-select" class="model-label">AI Model</label>
+                    <div class="model-select-wrapper">
+                        <select id="model-select" class="model-select" title="Choose which AI model answers you">
+                            <option value="auto">Auto (recommended)</option>
+                        </select>
+                        <svg class="model-select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <path d="M2 4l4 4 4-4" />
+                        </svg>
+                    </div>
+                </div>
+
                 <!-- Sections List -->
                 <nav class="sections-nav" id="sections-nav">
                     <div class="sections-label">Paper Sections</div>
@@ -143,19 +157,48 @@
                         <p>Upload a research paper to get AI-powered explanations, critiques, and answers.</p>
                         <div class="welcome-features">
                             <div class="welcome-feature">
-                                <span class="feature-icon">📖</span>
+                                <span class="feature-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z" />
+                                        <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
+                                    </svg>
+                                </span>
                                 <span>Smart Sectioning</span>
                             </div>
                             <div class="welcome-feature">
-                                <span class="feature-icon">🧠</span>
+                                <span class="feature-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M9 18h6" />
+                                        <path d="M10 22h4" />
+                                        <path
+                                            d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z" />
+                                    </svg>
+                                </span>
                                 <span>AI Explanations</span>
                             </div>
                             <div class="welcome-feature">
-                                <span class="feature-icon">🔍</span>
+                                <span class="feature-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="7" />
+                                        <line x1="21" y1="21" x2="16.5" y2="16.5" />
+                                    </svg>
+                                </span>
                                 <span>Critical Analysis</span>
                             </div>
                             <div class="welcome-feature">
-                                <span class="feature-icon">💬</span>
+                                <span class="feature-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M21 11.5a8.38 8.38 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.2a8.4 8.4 0 1 1 16.1-4.3z" />
+                                    </svg>
+                                </span>
                                 <span>Interactive Q&A</span>
                             </div>
                         </div>

@@ -1,23 +1,24 @@
 import os
 import io
-import uuid
 import logging
 
 from dotenv import load_dotenv
 
-# Load environment variables BEFORE any module that reads them
+# Load environment variables BEFORE any module that reads them.
+# Try the repo-root .env explicitly, then fall back to the default search.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 from backend.pdf_parser import parse_pdf
 from backend.sectioner import Sectioner
 from backend.embeddings import EmbeddingEngine
-from backend.rag import RAGController
+from backend.rag import RAGController, GroqAPIError
 
 
 # --- Logging ---
@@ -81,14 +82,25 @@ app.add_middleware(
 
 # --- Request Models ---
 
+class SectionPayload(BaseModel):
+    title: str = "Untitled"
+    content: str = ""
+
+
 class ChatRequest(BaseModel):
     query: str
     section_id: Optional[str] = None
+    # Preferred Groq model id, or "auto"/null for automatic routing
+    model: Optional[str] = None
+    # Paper sections sent by the client so retrieval works statelessly,
+    # with no external vector database required.
+    sections: Optional[List[SectionPayload]] = None
 
 
 class TextExplainRequest(BaseModel):
     text: str
     title: str = "Section"
+    model: Optional[str] = None
 
 
 # --- Health Check ---
@@ -98,6 +110,7 @@ async def health_check():
     return {
         "status": "ok",
         "services": {
+            "groq_key_configured": bool(os.getenv("GROQ_API_KEY")),
             "embedder": _embedder is not None,
             "rag": _rag is not None,
             "sectioner": _sectioner is not None,
@@ -106,6 +119,17 @@ async def health_check():
 
 
 # --- API Endpoints ---
+
+@app.get("/api/models")
+async def list_models():
+    """Return the models the user can pick from (plus the 'auto' option)."""
+    return RAGController.available_models_payload()
+
+
+def _raise_clean_http(e: GroqAPIError):
+    """Translate provider failures into clean, UI-safe HTTP errors."""
+    status = 429 if e.status == 429 else 503
+    raise HTTPException(status_code=status, detail=str(e))
 
 @app.post("/api/upload")
 async def upload_paper(
@@ -180,46 +204,55 @@ async def ask_question(req: ChatRequest):
         raise HTTPException(status_code=503, detail=f"Services unavailable: {e}")
 
     try:
-        context = embedder.search(req.query, k=5)
+        # Prefer the paper context supplied by the client (stateless, works
+        # on serverless); fall back to the in-process session index.
+        if req.sections:
+            context = embedder.search_sections(
+                req.query,
+                [s.model_dump() for s in req.sections],
+                k=4,
+            )
+        else:
+            context = embedder.search(req.query, k=4)
+
         if not context:
             return {
                 "answer": "I couldn't find relevant information. Please upload a paper first.",
                 "sources": [],
             }
 
-        answer = rag.generate_response(context, req.query, mode="explain")
-        sources = list(set(s.get("title", "Untitled") for s in context))
+        answer = rag.generate_response(context, req.query, mode="chat", model=req.model)
+        # Deduplicate sources while preserving order
+        sources = list(dict.fromkeys(s.get("title", "Untitled") for s in context))
         return {"answer": answer, "sources": sources}
 
+    except GroqAPIError as e:
+        _raise_clean_http(e)
     except Exception as e:
         logger.error(f"Ask failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Something went wrong while answering. Please try again.")
 
 
 @app.post("/api/explain_text")
 async def explain_text_endpoint(req: TextExplainRequest):
-    """Explain and critique a specific section of text."""
+    """Explain and critique a section with ONE provider call (rate-limit friendly)."""
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
     try:
         rag = get_rag()
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"RAG unavailable: {e}")
+        raise HTTPException(status_code=503, detail="AI service is not configured on the server.")
 
     try:
-        chunk = {"title": req.title, "content": req.text}
-        explanation = rag.generate_response(
-            [chunk], "Explain this section in simple terms.", mode="explain"
-        )
-        critique = rag.generate_response(
-            [chunk], "Critique this section.", mode="critique"
-        )
-        return {"explanation": explanation, "critique": critique}
+        result = rag.analyze_section(req.title, req.text, model=req.model)
+        return {"explanation": result["explanation"], "critique": result["critique"]}
 
+    except GroqAPIError as e:
+        _raise_clean_http(e)
     except Exception as e:
         logger.error(f"Explain failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Something went wrong during analysis. Please try again.")
 
 
 # --- Static Files (local dev only, Vercel handles static separately) ---

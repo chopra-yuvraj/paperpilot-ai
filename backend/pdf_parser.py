@@ -1,7 +1,7 @@
 import io
 import logging
 
-import pdfplumber
+from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,11 @@ def parse_pdf(file_input) -> str:
         if isinstance(file_input, io.BytesIO):
             file_input.seek(0)
 
-        with pdfplumber.open(file_input) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
+        reader = PdfReader(file_input)
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
 
     except Exception as e:
         logger.error(f"Error reading PDF: {e}")

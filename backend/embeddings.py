@@ -1,181 +1,199 @@
-import os
-import uuid
+"""
+Lightweight in-session vector store for PaperPilot AI.
+
+Replaces the previous Pinecone + hosted-embeddings stack with a pure-Python
+TF-IDF retriever. This removes all external vector-DB credentials, works on
+serverless platforms (no cold-start network deps), and is fast enough for
+single-paper retrieval. LLM generation is handled separately via Groq.
+"""
+import math
+import re
 import logging
 from typing import List, Dict, Optional
 
-from pinecone import Pinecone, ServerlessSpec
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
 logger = logging.getLogger(__name__)
 
-# Maximum metadata size for Pinecone (40KB limit, keep well under)
-MAX_CONTENT_METADATA_CHARS = 3500
-BATCH_SIZE = 100
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 150
+
+STOPWORDS = frozenset(
+    "a an the and or but if then else when at by for with about into through "
+    "during before after above below to from up down in out on off over under "
+    "again further once here there all any both each few more most other some "
+    "such no nor not only own same so than too very can will just should now "
+    "is are was were be been being have has had having do does did doing would "
+    "could ought i you he she it we they this that these those am of as its "
+    "their his her our your my me him them us what which who whom".split()
+)
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokenize(text: str) -> List[str]:
+    return [t for t in _TOKEN_RE.findall(text.lower()) if t not in STOPWORDS]
+
+
+def _chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
+    """Split text into overlapping chunks, preferring paragraph boundaries."""
+    text = text.strip()
+    if len(text) <= size:
+        return [text] if text else []
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + size, len(text))
+        if end < len(text):
+            # Prefer breaking at a paragraph, newline, or sentence end
+            boundary = max(
+                text.rfind("\n\n", start, end),
+                text.rfind("\n", start, end),
+                text.rfind(". ", start, end),
+            )
+            if boundary > start + size // 2:
+                end = boundary + 1
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end >= len(text):
+            break
+        start = max(end - overlap, start + 1)
+    return chunks
+
+
+class _TfidfIndex:
+    """Minimal TF-IDF index over text chunks with cosine similarity search."""
+
+    def __init__(self, docs: List[Dict[str, str]]):
+        self.docs = docs
+        doc_tokens = [_tokenize(d["content"]) for d in docs]
+
+        # Document frequency
+        df: Dict[str, int] = {}
+        for tokens in doc_tokens:
+            for term in set(tokens):
+                df[term] = df.get(term, 0) + 1
+
+        n_docs = max(len(docs), 1)
+        self.idf = {
+            term: math.log((1 + n_docs) / (1 + count)) + 1.0
+            for term, count in df.items()
+        }
+
+        # Normalized TF-IDF vector per doc: term -> weight
+        self.vectors: List[Dict[str, float]] = []
+        for tokens in doc_tokens:
+            if not tokens:
+                self.vectors.append({})
+                continue
+            tf: Dict[str, int] = {}
+            for t in tokens:
+                tf[t] = tf.get(t, 0) + 1
+            vec = {
+                term: (count / len(tokens)) * self.idf[term]
+                for term, count in tf.items()
+            }
+            norm = math.sqrt(sum(w * w for w in vec.values())) or 1.0
+            self.vectors.append({t: w / norm for t, w in vec.items()})
+
+    def _query_vector(self, query: str) -> Dict[str, float]:
+        tokens = _tokenize(query)
+        if not tokens:
+            return {}
+        tf: Dict[str, int] = {}
+        for t in tokens:
+            tf[t] = tf.get(t, 0) + 1
+        vec = {
+            term: (count / len(tokens)) * self.idf.get(term, 0.0)
+            for term, count in tf.items()
+            if term in self.idf
+        }
+        norm = math.sqrt(sum(w * w for w in vec.values())) or 1.0
+        return {t: w / norm for t, w in vec.items()}
+
+    def search(self, query: str, k: int = 5) -> List[Dict]:
+        qvec = self._query_vector(query)
+        if not qvec:
+            return []
+
+        scored = []
+        for i, dvec in enumerate(self.vectors):
+            # Both vectors are L2-normalized, dot product = cosine similarity
+            score = sum(w * dvec.get(t, 0.0) for t, w in qvec.items())
+            if score > 0:
+                result = dict(self.docs[i])
+                result["score"] = score
+                scored.append(result)
+
+        scored.sort(key=lambda d: d["score"], reverse=True)
+        return scored[:k]
 
 
 class EmbeddingEngine:
-    """Handles text embedding and vector storage/retrieval via Pinecone."""
+    """
+    Session-scoped text retriever.
 
-    def __init__(self, model_name: str = "models/text-embedding-004"):
-        logger.info(f"Initializing EmbeddingEngine with model: {model_name}")
-        self.model_name = model_name
-        self.dimension = 768
+    Keeps the same public interface the rest of the app expects
+    (``ensure_index_exists`` / ``ingest_sections`` / ``search``) and adds a
+    stateless ``search_sections`` helper for serverless deployments where
+    in-memory state cannot be relied upon.
+    """
 
-        # --- Google Gemini Embeddings ---
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "GEMINI_API_KEY not found in environment. Cannot initialize embeddings."
-            )
-
-        self.encoder = GoogleGenerativeAIEmbeddings(
-            model=model_name,
-            google_api_key=self.api_key,
-        )
-
-        # --- Pinecone Vector DB ---
-        self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
-        self.index_name = os.getenv("PINECONE_INDEX", "paperpilot-index")
-        self.pc: Optional[Pinecone] = None
-        self.index = None
-
-        if not self.pinecone_api_key:
-            raise ValueError(
-                "PINECONE_API_KEY not found in environment. Cannot initialize vector store."
-            )
-
-        try:
-            self.pc = Pinecone(api_key=self.pinecone_api_key)
-            self.index = self.pc.Index(self.index_name)
-            logger.info(f"Connected to Pinecone index: {self.index_name}")
-        except Exception as e:
-            logger.error(f"Pinecone initialization failed: {e}")
-            raise
+    def __init__(self):
+        self._docs: List[Dict[str, str]] = []
+        self._index: Optional[_TfidfIndex] = None
+        logger.info("EmbeddingEngine (TF-IDF session store) initialized.")
 
     def ensure_index_exists(self) -> None:
-        """Create the Pinecone index if it doesn't already exist."""
-        if not self.pc:
-            logger.warning("Pinecone client not initialized. Skipping index check.")
-            return
+        """No external index to create — kept for interface compatibility."""
+        return None
 
-        try:
-            existing = [idx.name for idx in self.pc.list_indexes()]
-            if self.index_name not in existing:
-                logger.info(f"Creating Pinecone index: {self.index_name}")
-                self.pc.create_index(
-                    name=self.index_name,
-                    dimension=self.dimension,
-                    metric="cosine",
-                    spec=ServerlessSpec(
-                        cloud="aws",
-                        region=os.getenv("PINECONE_ENV", "us-east-1"),
-                    ),
-                )
-                # Re-connect to the newly created index
-                self.index = self.pc.Index(self.index_name)
-                logger.info(f"Index '{self.index_name}' created successfully.")
-            else:
-                logger.info(f"Index '{self.index_name}' already exists.")
-        except Exception as e:
-            logger.error(f"Index existence check failed: {e}")
-
-    def _get_embedding(self, text: str) -> List[float]:
-        """Generate an embedding vector for the given text."""
-        return self.encoder.embed_query(text)
+    def _sections_to_docs(
+        self, sections: List[Dict[str, str]], filename: str
+    ) -> List[Dict[str, str]]:
+        docs = []
+        for sec in sections:
+            title = sec.get("title", "Untitled")
+            content = sec.get("content", "")
+            for chunk in _chunk_text(f"{title}\n{content}"):
+                docs.append({"title": title, "content": chunk, "filename": filename})
+        return docs
 
     def ingest_sections(
         self, sections: List[Dict[str, str]], filename: str = "unknown"
     ) -> int:
-        """
-        Embed and upsert paper sections into Pinecone.
-
-        Args:
-            sections: List of dicts with 'title' and 'content' keys.
-            filename: Original filename for metadata tracking.
-
-        Returns:
-            Number of vectors upserted.
-        """
+        """Index paper sections into the session store."""
         if not sections:
             logger.warning("No sections provided for ingestion.")
             return 0
 
-        if not self.index:
-            logger.error("Pinecone index not available. Cannot ingest.")
-            return 0
+        self._docs = self._sections_to_docs(sections, filename)
+        self._index = _TfidfIndex(self._docs) if self._docs else None
+        logger.info(f"Indexed {len(self._docs)} chunks from '{filename}'.")
+        return len(self._docs)
 
-        logger.info(f"Processing {len(sections)} sections for '{filename}'...")
+    def search(self, query: str, k: int = 5) -> List[Dict]:
+        """Search the sections most recently ingested in this process."""
+        if not self._index:
+            logger.warning("No ingested sections available for search.")
+            return []
+        return self._index.search(query, k=k)
 
-        vectors = []
+    @staticmethod
+    def search_sections(
+        query: str, sections: List[Dict[str, str]], k: int = 5
+    ) -> List[Dict]:
+        """
+        Stateless retrieval: build a temporary index over the provided
+        sections and return the top-k matching chunks. Ideal for serverless
+        deployments where the client supplies the paper context.
+        """
+        docs = []
         for sec in sections:
             title = sec.get("title", "Untitled")
             content = sec.get("content", "")
-            text_for_embedding = f"{title}: {content}"
-
-            try:
-                vector = self._get_embedding(text_for_embedding)
-            except Exception as e:
-                logger.error(f"Embedding failed for section '{title}': {e}")
-                continue
-
-            metadata = {
-                "title": title,
-                "content": content[:MAX_CONTENT_METADATA_CHARS],
-                "filename": filename,
-            }
-
-            vectors.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "values": vector,
-                    "metadata": metadata,
-                }
-            )
-
-        # Batch upsert
-        upserted = 0
-        for i in range(0, len(vectors), BATCH_SIZE):
-            batch = vectors[i : i + BATCH_SIZE]
-            try:
-                self.index.upsert(vectors=batch)
-                upserted += len(batch)
-            except Exception as e:
-                logger.error(f"Upsert batch failed at offset {i}: {e}")
-
-        logger.info(f"Upserted {upserted}/{len(vectors)} vectors to Pinecone.")
-        return upserted
-
-    def search(self, query: str, k: int = 5) -> List[Dict]:
-        """
-        Semantic search across ingested vectors.
-
-        Args:
-            query: Natural language query string.
-            k: Number of top results to return.
-
-        Returns:
-            List of metadata dicts from matching vectors.
-        """
-        if not self.index:
-            logger.error("Pinecone index not available. Cannot search.")
+            for chunk in _chunk_text(f"{title}\n{content}"):
+                docs.append({"title": title, "content": chunk, "filename": ""})
+        if not docs:
             return []
-
-        try:
-            query_vec = self._get_embedding(query)
-            results = self.index.query(
-                vector=query_vec,
-                top_k=k,
-                include_metadata=True,
-            )
-
-            matches = []
-            for match in results.get("matches", []):
-                meta = match.get("metadata", {})
-                meta["score"] = match.get("score", 0.0)
-                matches.append(meta)
-
-            return matches
-
-        except Exception as e:
-            logger.error(f"Search failed: {e}")
-            return []
+        return _TfidfIndex(docs).search(query, k=k)

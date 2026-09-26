@@ -1,7 +1,7 @@
 # PaperPilot AI - Intelligent Research Assistant
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.95%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Hugging Face](https://img.shields.io/badge/Hugging_Face-Powered-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/)
+[![Groq](https://img.shields.io/badge/Groq-Powered-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
 [![JavaScript](https://img.shields.io/badge/Vanilla_JS-ES6%2B-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
@@ -13,26 +13,61 @@ This project bridges the gap between **academic density** and **accessible knowl
 
 ### Key Features
 - **Smart Sectioning** - Automatically parses PDF research papers and breaks them down into logical sections (Abstract, Methodology, Experiments).
-- **Context-Aware RAG** - Uses vector embeddings (FAISS) to ground every answer in the specific text of the paper.
+- **Context-Aware RAG** - Lightweight built-in TF-IDF retrieval grounds every answer in the specific text of the paper.
 - **AI Critic** - A dedicated "Critic" agent that identifies weak assumptions, missing citations, and potential methodological flaws.
 - **"Glass" Aesthetic** - A premium, dark-mode interface with frosted glass effects and smooth transitions.
-- **Free-Tier Optimized** - Engineered to run efficiently on low-memory environments (512MB RAM) using API-based inference.
+- **Model Switching** - Pick any available Groq model from the sidebar, or leave it on **Auto** to route each task to the best model with automatic fallbacks.
+- **Rate-Limit Resilient** - Automatic retries with backoff, combined analysis calls, and client-side caching keep the app smooth on free-tier limits.
+- **100% Free Forever** - No paid cloud services. Retrieval runs in-app, persistence uses the browser's local storage, and the LLM runs on Groq's free tier.
 
 ---
 
 ### Application Interaction
 | Feature | Action | Experience |
 |---------|--------|------------|
-| **Paper Upload** | Drag & Drop PDF | System parses structure, indexing content into vector space in seconds. |
+| **Paper Upload** | Drag & Drop PDF | System parses structure and indexes content in seconds. |
 | **Section Deep Dive** | Click any Section | The AI "reads" that specific section and explains it in simple terms. |
 | **Critical Analysis** | "Critique" Button | The AI switches modes to become a reviewer, highlighting flaws and gaps. |
 | **Interactive Q&A** | Ask a Question | RAG pipeline retrieves relevant chunks and synthesizes a grounded answer. |
 
 ### Engineering Highlights
 - **Backend**: Built on **FastAPI** for high-performance, asynchronous request handling.
-- **AI Engine**: Leverages **Hugging Face Inference API** (Mistral-7B / MiniLM) for embeddings and generation without local hardware overhead.
-- **Vector DB**: **FAISS** (Facebook AI Similarity Search) for millisecond-latency semantic retrieval.
+- **AI Engine**: Uses the **Groq API** (`openai/gpt-oss-120b`) for fast, free-tier LLM generation without local hardware overhead.
+- **Retrieval**: Zero-dependency **TF-IDF retrieval** written in pure Python - no external vector database, no credentials, fully serverless-friendly.
+- **Persistence**: The uploaded paper and chat history are restored from the browser's **localStorage** - no cloud database required.
 - **Frontend**: Pure **HTML5/CSS3/JS** with no heavy frameworks, focusing on performance and raw DOM manipulation.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Python 3.10+
+- A free **[Groq API key](https://console.groq.com/keys)**
+
+### Run Locally
+```bash
+git clone https://github.com/chopra-yuvraj/paperpilot-ai.git
+cd paperpilot-ai
+
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
+
+pip install -r requirements.txt
+
+# Add your Groq key
+copy .env.example .env          # Windows (cp .env.example .env on macOS/Linux)
+# then edit .env and set GROQ_API_KEY
+
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+Open **http://localhost:8000** in your browser and upload a PDF.
+
+### Deploy to Vercel
+1. Push this repo to GitHub and import it in Vercel.
+2. In the Vercel project settings, add the environment variable `GROQ_API_KEY`.
+3. Deploy - `vercel.json` routes `/api/*` to the serverless function and serves the frontend automatically. No other services are needed.
 
 ---
 

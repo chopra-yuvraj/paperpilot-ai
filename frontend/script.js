@@ -1,7 +1,15 @@
 // === Configuration ===
-const API_BASE = window.location.protocol === 'file:'
-    ? 'http://localhost:8000'
-    : window.location.origin;
+// Resolve the API origin:
+// - Opened as a file or from a different local port (e.g. VS Code Live Server)
+//   -> talk to the local backend on port 8000.
+// - Otherwise (uvicorn serving the app, or a Vercel deployment) -> same origin.
+const API_BASE = (() => {
+    const { protocol, hostname, port, origin } = window.location;
+    if (protocol === "file:") return "http://localhost:8000";
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+    if (isLocal && port !== "" && port !== "8000") return "http://localhost:8000";
+    return origin;
+})();
 
 // === DOM References ===
 const $ = (id) => document.getElementById(id);
@@ -28,11 +36,182 @@ const uploadStatusTitle = $("upload-status-title");
 const uploadStatusDetail = $("upload-status-detail");
 const sidebarToggle = $("sidebar-toggle");
 const sidebar = $("sidebar");
+const modelSelect = $("model-select");
 
 // === State ===
 let appSections = [];
 let activeSectionIndex = -1;
 let isProcessing = false;
+let currentPaperKey = null;
+
+function makePaperKey(filename, sectionCount) {
+    return `${filename || "paper"}::${sectionCount}`;
+}
+
+// Analysis cache (per paper) - clicking a section again costs zero API calls
+const analysisInFlight = new Set();
+
+function getCachedAnalysis(index) {
+    const store = storageGet(STORAGE_KEYS.analysis);
+    if (!store || store.paperKey !== currentPaperKey || !store.sections) return null;
+    return store.sections[index] || null;
+}
+
+function setCachedAnalysis(index, data) {
+    let store = storageGet(STORAGE_KEYS.analysis);
+    if (!store || store.paperKey !== currentPaperKey) {
+        store = { paperKey: currentPaperKey, sections: {} };
+    }
+    store.sections[index] = {
+        explanation: data.explanation || "",
+        critique: data.critique || "",
+    };
+    storageSet(STORAGE_KEYS.analysis, store);
+}
+
+// === Local Persistence (browser localStorage — no cloud database) ===
+const STORAGE_KEYS = {
+    paper: "paperpilot.paper",
+    chat: "paperpilot.chat",
+    model: "paperpilot.model",
+    analysis: "paperpilot.analysis",
+};
+
+function storageSet(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        // Quota exceeded or private browsing — persistence is best-effort.
+    }
+}
+
+function storageGet(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+function storageRemove(key) {
+    try {
+        localStorage.removeItem(key);
+    } catch { /* ignore */ }
+}
+
+function persistPaper(filename) {
+    // Cap stored content so we stay well under the ~5MB localStorage quota.
+    const totalChars = appSections.reduce((n, s) => n + (s.content || "").length, 0);
+    if (totalChars > 3 * 1024 * 1024) return;
+    storageSet(STORAGE_KEYS.paper, { filename, sections: appSections });
+}
+
+function persistChatHistory() {
+    const msgs = [];
+    chatHistory.querySelectorAll(".msg").forEach((el) => {
+        if (el.id === "welcome-msg") return;
+        const role = el.classList.contains("msg--user") ? "user" : "bot";
+        // Bots store the markdown source on the element; fall back to text
+        const body = el.querySelector(".msg-content");
+        const text = ((el.dataset.raw || body?.innerText) || "").trim();
+        if (text) msgs.push({ role, text });
+    });
+    storageSet(STORAGE_KEYS.chat, msgs.slice(-50));
+}
+
+function restoreSession() {
+    const paper = storageGet(STORAGE_KEYS.paper);
+    if (paper && Array.isArray(paper.sections) && paper.sections.length > 0) {
+        appSections = paper.sections;
+        currentPaperKey = makePaperKey(paper.filename || "paper", appSections.length);
+        fileStatusText.textContent = paper.filename || "Restored paper";
+        fileStatus.classList.add("file-status--active");
+        renderSections(appSections);
+        showToast(`Restored "${paper.filename}" from local storage`, "info", 3000);
+    }
+
+    const chat = storageGet(STORAGE_KEYS.chat);
+    if (Array.isArray(chat)) {
+        chat.forEach(({ role, text }) => {
+            if ((role === "user" || role === "bot") && typeof text === "string") {
+                const msg = appendMessage(role, text);
+                // Re-render stored bot replies as formatted markdown
+                if (role === "bot") {
+                    const body = msg.querySelector(".msg-content");
+                    if (body) renderMarkdown(body, text);
+                }
+            }
+        });
+    }
+}
+
+// === Markdown Rendering (AI answers always render beautifully) ===
+function renderMarkdown(container, text) {
+    const source = text || "";
+    try {
+        const html = typeof marked !== "undefined" ? marked.parse(source) : source;
+        container.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(html) : html;
+    } catch {
+        container.textContent = source;
+    }
+    container.classList.add("markdown-body");
+}
+
+const SKELETON_HTML =
+    '<div class="skeleton-block"><div class="skeleton-line skeleton-line--full"></div>' +
+    '<div class="skeleton-line skeleton-line--80"></div><div class="skeleton-line skeleton-line--60"></div></div>';
+
+// === Model Selection ===
+let selectedModel = storageGet(STORAGE_KEYS.model) || "auto";
+
+async function initModelSelector() {
+    const FALLBACK_MODELS = [
+        { id: "auto", label: "Auto (recommended)" },
+        { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+        { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
+        { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B" },
+        { id: "allam-2-7b", label: "ALLaM 2 7B" },
+    ];
+
+    let models = FALLBACK_MODELS;
+    try {
+        const res = await fetch(`${API_BASE}/api/models`);
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.models) && data.models.length) {
+                models = data.models.map((m) => ({
+                    id: m.id,
+                    label: m.id === "auto" ? "Auto (recommended)" : m.label || m.id,
+                }));
+            }
+        }
+    } catch {
+        // Backend not reachable yet — the fallback list keeps the UI usable.
+    }
+
+    if (!modelSelect) return;
+    modelSelect.innerHTML = "";
+    models.forEach(({ id, label }) => {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = label;
+        modelSelect.appendChild(opt);
+    });
+
+    const ids = new Set(models.map((m) => m.id));
+    selectedModel = ids.has(selectedModel) ? selectedModel : "auto";
+    modelSelect.value = selectedModel;
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener("change", () => {
+        selectedModel = modelSelect.value;
+        storageSet(STORAGE_KEYS.model, selectedModel);
+        const label = modelSelect.selectedOptions[0]?.textContent || selectedModel;
+        showToast(`AI model: ${label}`, "info", 2500);
+    });
+}
 
 // === Toast Notifications ===
 function showToast(message, type = "info", duration = 4000) {
@@ -45,28 +224,6 @@ function showToast(message, type = "info", duration = 4000) {
         toast.classList.add("removing");
         setTimeout(() => toast.remove(), 300);
     }, duration);
-}
-
-// === Typewriter Effect ===
-function typeText(element, text, speed = 12) {
-    return new Promise((resolve) => {
-        if (!text) { element.textContent = ""; resolve(); return; }
-        element.textContent = "";
-        element.classList.add("typing");
-        let i = 0;
-        const interval = setInterval(() => {
-            element.textContent += text.charAt(i);
-            i++;
-            // Auto-scroll chat if inside chat
-            const parent = element.closest(".chat-history");
-            if (parent) parent.scrollTop = parent.scrollHeight;
-            if (i >= text.length) {
-                clearInterval(interval);
-                element.classList.remove("typing");
-                resolve();
-            }
-        }, speed);
-    });
 }
 
 // === Auto-resize textarea ===
@@ -125,7 +282,12 @@ fileInput.addEventListener("change", async (e) => {
 
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || `Upload failed (${response.status})`);
+            let message = err.detail || `Upload failed (${response.status})`;
+            if (response.status === 404 && !err.detail) {
+                message = "Upload failed (404): the API endpoint was not found. "
+                    + "Is the backend running and up to date?";
+            }
+            throw new Error(message);
         }
 
         const data = await response.json();
@@ -137,6 +299,13 @@ fileInput.addEventListener("change", async (e) => {
         // Update UI
         fileStatusText.textContent = data.filename || file.name;
         fileStatus.classList.add("file-status--active");
+
+        // New paper -> clear stale chat/analysis and persist the session locally
+        chatHistory.querySelectorAll(".msg:not(#welcome-msg)").forEach((el) => el.remove());
+        storageRemove(STORAGE_KEYS.chat);
+        storageRemove(STORAGE_KEYS.analysis);
+        currentPaperKey = makePaperKey(data.filename || file.name, appSections.length);
+        persistPaper(data.filename || file.name);
 
         renderSections(appSections);
         showToast(`Loaded ${appSections.length} sections from ${file.name}`, "success");
@@ -192,7 +361,7 @@ async function loadSection(index) {
 
     // Reset analysis
     analysisPanel.classList.add("hidden");
-    aiExplanation.innerHTML = '<div class="skeleton-block"><div class="skeleton-line skeleton-line--full"></div><div class="skeleton-line skeleton-line--80"></div><div class="skeleton-line skeleton-line--60"></div></div>';
+    aiExplanation.innerHTML = SKELETON_HTML;
     aiCritique.innerHTML = "";
 
     // Animate content transition
@@ -209,46 +378,89 @@ async function loadSection(index) {
     readingView.style.opacity = "1";
     readingView.style.transform = "translateY(0)";
 
-    // Show analysis panel and fetch AI analysis
+    // Show analysis panel and fetch AI analysis (cached when possible)
     analysisPanel.classList.remove("hidden");
-    fetchExplanation(section.title, section.content);
+    fetchAnalysis(section, index);
 }
 
-// === Fetch AI Explanation ===
-async function fetchExplanation(title, content) {
+// === AI Section Analysis (cached, guarded, retryable) ===
+function renderAnalysis(explanation, critique) {
+    renderMarkdown(aiExplanation, explanation || "No explanation available.");
+    if (critique) {
+        renderMarkdown(aiCritique, critique);
+    } else {
+        aiCritique.innerHTML = '<p class="ai-muted">No critique available for this section.</p>';
+    }
+    aiCritique.style.animation = "fadeIn 0.6s ease";
+}
+
+function showAnalysisError(section, index, message) {
+    const isRateLimit = /rate.?limit|429|busy/i.test(message || "");
+    const friendly = isRateLimit
+        ? "The AI is briefly at its free-tier limit. Wait a few seconds, then retry."
+        : "The analysis could not be generated right now.";
+
+    aiExplanation.innerHTML = "";
+    aiCritique.innerHTML = "";
+
+    const wrap = document.createElement("div");
+    wrap.className = "ai-error";
+    const span = document.createElement("span");
+    span.textContent = friendly;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "retry-btn";
+    btn.textContent = "Retry";
+    btn.addEventListener("click", () => {
+        aiExplanation.innerHTML = SKELETON_HTML;
+        fetchAnalysis(section, index, true);
+    });
+    wrap.appendChild(span);
+    wrap.appendChild(btn);
+    aiExplanation.appendChild(wrap);
+}
+
+async function fetchAnalysis(section, index, force = false) {
+    if (activeSectionIndex !== index) return;
+
+    if (!force) {
+        const cached = getCachedAnalysis(index);
+        if (cached) {
+            renderAnalysis(cached.explanation, cached.critique);
+            return;
+        }
+    }
+    if (analysisInFlight.has(index)) return; // avoid duplicate calls
+    analysisInFlight.add(index);
+
     try {
         const res = await fetch(`${API_BASE}/api/explain_text`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: content, title: title }),
+            body: JSON.stringify({
+                text: section.content,
+                title: section.title,
+                model: selectedModel,
+            }),
         });
 
-        if (!res.ok) throw new Error("Explanation request failed");
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `Analysis failed (${res.status})`);
+        }
 
         const data = await res.json();
+        setCachedAnalysis(index, data);
+        if (activeSectionIndex !== index) return; // user moved to another section
 
-        // Render explanation with typewriter
         aiExplanation.innerHTML = "";
-        const expSpan = document.createElement("span");
-        aiExplanation.appendChild(expSpan);
-        await typeText(expSpan, data.explanation || "No explanation available.", 8);
-
-        // Render critique as markdown (sanitized)
-        if (data.critique) {
-            try {
-                const rawHtml = marked.parse(data.critique);
-                aiCritique.innerHTML = typeof DOMPurify !== 'undefined'
-                    ? DOMPurify.sanitize(rawHtml)
-                    : rawHtml;
-            } catch {
-                aiCritique.textContent = data.critique;
-            }
-        }
-        aiCritique.style.animation = "fadeIn 0.6s ease";
-
+        renderAnalysis(data.explanation, data.critique);
     } catch (err) {
-        console.error("Explanation error:", err);
-        aiExplanation.innerHTML = `<span style="color:var(--error)">⚠️ ${err.message}</span>`;
+        console.error("Analysis error:", err);
+        if (activeSectionIndex !== index) return;
+        showAnalysisError(section, index, err.message);
+    } finally {
+        analysisInFlight.delete(index);
     }
 }
 
@@ -276,37 +488,54 @@ async function sendMessage() {
     const contentEl = botMsg.querySelector(".msg-content");
     contentEl.innerHTML = '<span class="loading-text" style="color:var(--text-muted)">Analyzing your question...</span>';
 
+    // Send the paper context with the question so the backend can retrieve
+    // relevant passages statelessly — no cloud vector database needed.
+    const payload = { query: text, model: selectedModel };
+    if (appSections.length > 0) {
+        payload.sections = appSections.map(({ title, content }) => ({ title, content }));
+    }
+
     try {
         const res = await fetch(`${API_BASE}/api/ask`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: text }),
+            body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || "Request failed");
+            const detail = typeof err.detail === "string" ? err.detail : "";
+            throw new Error(detail || `The request failed (${res.status}). Please try again.`);
         }
 
         const data = await res.json();
 
-        // Build reply
+        // Build reply (markdown) and render it formatted
         let reply = data.answer || "I couldn't generate a response.";
         if (data.sources && data.sources.length > 0) {
-            reply += "\n\n📎 Sources: " + data.sources.join(", ");
+            reply += "\n\n**Sources:** " + data.sources.join(", ");
         }
 
-        contentEl.innerHTML = "";
-        const span = document.createElement("span");
-        contentEl.appendChild(span);
-        await typeText(span, reply, 15);
+        botMsg.dataset.raw = reply;
+        renderMarkdown(contentEl, reply);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
 
     } catch (err) {
         console.error("Chat error:", err);
-        contentEl.innerHTML = `<span style="color:var(--error)">⚠️ ${err.message}</span>`;
+        const isRateLimit = /rate.?limit|429|busy/i.test(err.message || "");
+        const friendly = isRateLimit
+            ? "The AI is briefly at its free-tier limit. Please resend your question in a few seconds."
+            : err.message || "Something went wrong. Please try again.";
+        botMsg.dataset.raw = "";
+        contentEl.innerHTML = "";
+        const errSpan = document.createElement("span");
+        errSpan.style.color = "var(--error)";
+        errSpan.textContent = friendly;
+        contentEl.appendChild(errSpan);
     } finally {
         chatStatus.textContent = "Ready";
         chatStatus.style.color = "var(--success)";
+        persistChatHistory();
     }
 }
 
@@ -323,9 +552,13 @@ function appendMessage(role, text) {
     const content = document.createElement("div");
     content.className = "msg-content";
     if (text) {
-        const p = document.createElement("p");
-        p.textContent = text;
-        content.appendChild(p);
+        // Split on newlines so multi-line messages render paragraphs correctly.
+        text.split("\n").forEach((line) => {
+            if (!line.trim()) return;
+            const p = document.createElement("p");
+            p.textContent = line;
+            content.appendChild(p);
+        });
     }
 
     msg.appendChild(avatar);
@@ -348,3 +581,7 @@ document.addEventListener("keydown", (e) => {
         sidebar.classList.remove("open");
     }
 });
+
+// === Startup: restore the previous session from local storage ===
+restoreSession();
+initModelSelector();

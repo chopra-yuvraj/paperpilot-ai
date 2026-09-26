@@ -7,16 +7,8 @@ pydantic
 # Environment
 python-dotenv
 
-# PDF Processing
-pdfplumber
+# PDF Processing (pure Python — no native dependencies, serverless-friendly)
+pypdf
 
-# AI / LLM
-langchain-google-genai
-langchain-core
-google-generativeai
-
-# Vector Database
-pinecone
-
-# HTTP
+# HTTP (used for the Groq LLM API)
 requests

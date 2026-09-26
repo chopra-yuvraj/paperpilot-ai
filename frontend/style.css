@@ -463,16 +463,68 @@ body {
 .toast--info { border-left: 3px solid var(--accent); }
 .toast.removing { animation: toastOut 0.3s var(--ease) forwards; }
 
-/* === Typing Cursor === */
-.typing::after {
-    content: '▋'; display: inline-block; vertical-align: baseline;
-    animation: blink 1s infinite; color: var(--accent-light);
-    margin-left: 2px; font-size: 0.85em;
-}
-
 /* === Utilities === */
 .hidden { display: none !important; }
 .loading-text { animation: pulse 1.5s infinite ease-in-out; }
+
+/* === Model Selector === */
+.model-selector { margin-top: 0.75rem; width: 100%; }
+.model-label {
+    display: block; font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 0.35rem; padding: 0 0.25rem;
+}
+.model-select-wrapper { position: relative; }
+.model-select {
+    width: 100%; appearance: none; -webkit-appearance: none;
+    background: var(--bg-input); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.55rem 2rem 0.55rem 0.75rem;
+    font-family: var(--font-sans); font-size: 0.82rem; font-weight: 500;
+    cursor: pointer; outline: none;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.model-select:hover { border-color: var(--border-hover); }
+.model-select:focus { border-color: var(--border-accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.model-select option { background: #14141f; color: var(--text-primary); }
+.model-select-chevron {
+    position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+}
+
+/* === Markdown Rich Text (AI answers) === */
+.markdown-body h1, .markdown-body h2 {
+    font-size: 1.05rem; font-weight: 700; color: var(--text-primary);
+    margin: 0.9rem 0 0.45rem;
+}
+.markdown-body p:last-child, .markdown-body ul:last-child, .markdown-body ol:last-child { margin-bottom: 0; }
+.markdown-body blockquote {
+    border-left: 3px solid var(--border-accent);
+    padding: 0.15rem 0 0.15rem 0.75rem; margin: 0.5rem 0;
+    color: var(--text-secondary);
+}
+.markdown-body table { border-collapse: collapse; margin: 0.6rem 0; font-size: 0.85em; width: 100%; }
+.markdown-body th, .markdown-body td {
+    border: 1px solid var(--border); padding: 0.35rem 0.6rem; text-align: left;
+}
+.markdown-body th { color: var(--text-primary); background: var(--bg-surface-2); }
+.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+.markdown-body a { color: var(--text-accent); }
+
+/* === AI Error State === */
+.ai-error {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5;
+}
+.retry-btn {
+    background: var(--bg-surface-3); color: var(--text-accent);
+    border: 1px solid var(--border-accent); border-radius: 8px;
+    padding: 0.35rem 0.9rem; font-size: 0.8rem; font-weight: 600;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all 0.2s var(--ease);
+}
+.retry-btn:hover { background: var(--accent); color: #fff; box-shadow: var(--shadow-glow); }
+.ai-muted { color: var(--text-muted); font-size: 0.85rem; font-style: italic; }
 
 /* === Responsive === */
 @media (max-width: 1024px) {
