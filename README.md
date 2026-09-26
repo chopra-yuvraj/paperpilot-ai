@@ -1,6 +1,5 @@
 # PaperPilot AI - Intelligent Research Assistant
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.95%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![No Backend](https://img.shields.io/badge/Backend-None%20Needed-34d399?style=for-the-badge&logo=googlechrome&logoColor=white)](#getting-started)
 [![Groq](https://img.shields.io/badge/Groq-Powered-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
 [![JavaScript](https://img.shields.io/badge/Vanilla_JS-ES6%2B-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
@@ -31,10 +30,10 @@ This project bridges the gap between **academic density** and **accessible knowl
 | **Interactive Q&A** | Ask a Question | RAG pipeline retrieves relevant chunks and synthesizes a grounded answer. |
 
 ### Engineering Highlights
-- **Backend**: Built on **FastAPI** for high-performance, asynchronous request handling.
-- **AI Engine**: Uses the **Groq API** (`openai/gpt-oss-120b`) for fast, free-tier LLM generation without local hardware overhead.
-- **Retrieval**: Zero-dependency **TF-IDF retrieval** written in pure Python - no external vector database, no credentials, fully serverless-friendly.
-- **Persistence**: The uploaded paper and chat history are restored from the browser's **localStorage** - no cloud database required.
+- **Fully Client-Side**: No backend server at all. PDF parsing (PDF.js), sectioning, retrieval, and AI calls all run locally in the user's browser.
+- **AI Engine**: The browser talks directly to the **Groq API** (`openai/gpt-oss-120b` and friends) - fast, free-tier LLM generation.
+- **Retrieval**: Zero-dependency **TF-IDF retrieval** in plain JavaScript - no vector database, no embeddings API.
+- **Persistence**: The paper, chat history, model choice, and the user's Groq key live in the browser's **localStorage** - nothing is sent anywhere except Groq.
 - **Frontend**: Pure **HTML5/CSS3/JS** with no heavy frameworks, focusing on performance and raw DOM manipulation.
 
 ---
@@ -42,32 +41,26 @@ This project bridges the gap between **academic density** and **accessible knowl
 ## Getting Started
 
 ### Prerequisites
-- Python 3.10+
-- A free **[Groq API key](https://console.groq.com/keys)**
+- A modern browser
+- A free **[Groq API key](https://console.groq.com/keys)** (takes 30 seconds to create)
 
 ### Run Locally
+No installation, no build step, no server:
 ```bash
 git clone https://github.com/chopra-yuvraj/paperpilot-ai.git
-cd paperpilot-ai
-
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS/Linux
-
-pip install -r requirements.txt
-
-# Add your Groq key
-copy .env.example .env          # Windows (cp .env.example .env on macOS/Linux)
-# then edit .env and set GROQ_API_KEY
-
-uvicorn backend.main:app --host 127.0.0.1 --port 8000
+cd paperpilot-ai/frontend
+# Option A: just open index.html in your browser
+# Option B: serve it statically (any static server works)
+python -m http.server 8000   # then open http://localhost:8000
 ```
-Open **http://localhost:8000** in your browser and upload a PDF.
+1. Paste your **Groq API key** in the sidebar (it is stored only in your browser).
+2. Upload a PDF - it is parsed locally, never uploaded anywhere.
+3. Chat, get explanations and critiques.
 
-### Deploy to Vercel
-1. Push this repo to GitHub and import it in Vercel.
-2. In the Vercel project settings, add the environment variable `GROQ_API_KEY`.
-3. Deploy - `vercel.json` routes `/api/*` to the serverless function and serves the frontend automatically. No other services are needed.
+### Deploy to Vercel (or any static host)
+1. Push this repo to GitHub and import it in Vercel - that's it.
+2. No environment variables, no serverless functions. Each visitor adds their own free Groq key.
+3. `vercel.json` serves the `frontend/` folder at the site root.
 
 ---
 

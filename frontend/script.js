@@ -1,219 +1,143 @@
-// === Configuration ===
-// Resolve the API origin:
-// - Opened as a file or from a different local port (e.g. VS Code Live Server)
-//   -> talk to the local backend on port 8000.
-// - Otherwise (uvicorn serving the app, or a Vercel deployment) -> same origin.
-const API_BASE = (() => {
-    const { protocol, hostname, port, origin } = window.location;
-    if (protocol === "file:") return "http://localhost:8000";
-    const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
-    if (isLocal && port !== "" && port !== "8000") return "http://localhost:8000";
-    return origin;
-})();
+/* PaperPilot AI — UI Controller v2
+ * Multi-session management, API key modal, PDF viewer, premium UI.
+ * Everything runs client-side via PaperPilotEngine.
+ */
+"use strict";
 
-// === DOM References ===
+// ─── DEFAULT TRIAL KEY (shared, rate-limited) ───────────────────────────────
+// This tells engine.js to use the Vercel backend proxy for the trial key.
+const TRIAL_API_KEY = "trial";
+const TRIAL_KEY_LABEL = "trial"; // marker to know it's the built-in key
+
+const Engine = window.PaperPilotEngine;
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const uploadBtn = $("upload-btn");
-const fileInput = $("file-input");
-const sectionsList = $("sections-list");
-const fileStatus = $("file-status");
-const fileStatusText = $("file-status-text");
-const placeholderMsg = $("placeholder-msg");
-const welcomeState = $("welcome-state");
-const readingView = $("reading-view");
-const sectionNumber = $("section-number");
-const sectionTitle = $("section-title");
-const sectionContent = $("section-content");
-const analysisPanel = $("analysis-panel");
-const aiExplanation = $("ai-explanation");
-const aiCritique = $("ai-critique");
-const chatQuery = $("chat-query");
-const sendChatBtn = $("send-chat");
-const chatHistory = $("chat-history");
-const chatStatus = $("chat-status");
-const uploadOverlay = $("upload-overlay");
+
+// API Key Modal
+const apiKeyModal       = $("api-key-modal");
+const tabTrial          = $("tab-trial");
+const tabPremium        = $("tab-premium");
+const tabOwn            = $("tab-own");
+const panelTrial        = $("panel-trial");
+const panelPremium      = $("panel-premium");
+const panelOwn          = $("panel-own");
+const modalKeyInput     = $("modal-key-input");
+const modalKeyToggle    = $("modal-key-toggle");
+const premiumKeyInput   = $("premium-key-input");
+const premiumKeyToggle  = $("premium-key-toggle");
+const modalProceedBtn   = $("modal-proceed-btn");
+const upgradeBanner     = $("upgrade-banner");
+const upgradeBannerBtn  = $("upgrade-banner-btn");
+
+// Sidebar
+const uploadBtn         = $("upload-btn");
+const fileInput         = $("file-input");
+const sessionsList      = $("sessions-list");
+const placeholderMsg    = $("placeholder-msg");
+const clearSessionsBtn  = $("clear-sessions-btn");
+const apiKeySettingsBtn = $("api-key-settings-btn");
+const keyStatusFooter   = $("key-status-footer");
+
+// Main
+const welcomeState      = $("welcome-state");
+const welcomeUploadBtn  = $("welcome-upload-btn");
+const sessionView       = $("session-view");
+const sessionFilename   = $("session-filename");
+const sessionSectionCount = $("session-section-count");
+
+// View tabs
+const tabReader         = $("tab-reader");
+const tabPdf            = $("tab-pdf");
+const readerSplit       = $("reader-split");
+const pdfViewPanel      = $("pdf-view-panel");
+
+// Sections
+const sectionsList      = $("sections-list");
+
+// Reader
+const readingPlaceholder = $("reading-placeholder");
+const readingView       = $("reading-view");
+const sectionNumber     = $("section-number");
+const sectionTitle      = $("section-title");
+const sectionContent    = $("section-content");
+const analysisPanel     = $("analysis-panel");
+const aiExplanation     = $("ai-explanation");
+const aiCritique        = $("ai-critique");
+
+// PDF viewer
+const pdfCanvas         = $("pdf-canvas");
+const pdfCanvasContainer= $("pdf-canvas-container");
+const pdfPrevBtn        = $("pdf-prev");
+const pdfNextBtn        = $("pdf-next");
+const pdfPageNum        = $("pdf-page-num");
+const pdfPageCount      = $("pdf-page-count");
+const pdfZoomOut        = $("pdf-zoom-out");
+const pdfZoomIn         = $("pdf-zoom-in");
+const pdfZoomLabel      = $("pdf-zoom-label");
+const pdfToolbarFilename= $("pdf-toolbar-filename");
+
+// Chat
+const chatQuery         = $("chat-query");
+const sendChatBtn       = $("send-chat");
+const chatHistory       = $("chat-history");
+const chatStatus        = $("chat-status");
+const chatClearBtn      = $("chat-clear-btn");
+const chatToggleBtn     = $("chat-toggle-btn");
+const modelSelect       = $("model-select");
+
+// Overlays
+const uploadOverlay     = $("upload-overlay");
 const uploadStatusTitle = $("upload-status-title");
-const uploadStatusDetail = $("upload-status-detail");
-const sidebarToggle = $("sidebar-toggle");
-const sidebar = $("sidebar");
-const modelSelect = $("model-select");
+const uploadStatusDetail= $("upload-status-detail");
 
-// === State ===
-let appSections = [];
-let activeSectionIndex = -1;
-let isProcessing = false;
-let currentPaperKey = null;
-
-function makePaperKey(filename, sectionCount) {
-    return `${filename || "paper"}::${sectionCount}`;
-}
-
-// Analysis cache (per paper) - clicking a section again costs zero API calls
-const analysisInFlight = new Set();
-
-function getCachedAnalysis(index) {
-    const store = storageGet(STORAGE_KEYS.analysis);
-    if (!store || store.paperKey !== currentPaperKey || !store.sections) return null;
-    return store.sections[index] || null;
-}
-
-function setCachedAnalysis(index, data) {
-    let store = storageGet(STORAGE_KEYS.analysis);
-    if (!store || store.paperKey !== currentPaperKey) {
-        store = { paperKey: currentPaperKey, sections: {} };
-    }
-    store.sections[index] = {
-        explanation: data.explanation || "",
-        critique: data.critique || "",
-    };
-    storageSet(STORAGE_KEYS.analysis, store);
-}
-
-// === Local Persistence (browser localStorage — no cloud database) ===
-const STORAGE_KEYS = {
-    paper: "paperpilot.paper",
-    chat: "paperpilot.chat",
-    model: "paperpilot.model",
-    analysis: "paperpilot.analysis",
+// ─── STORAGE SCHEMA ──────────────────────────────────────────────────────────
+const SK = {
+    sessions:   "pp2.sessions",      // array of session metadata objects
+    activeId:   "pp2.activeSession",  // currently active session id
+    model:      "pp2.model",          // chosen model
+    apiKey:     "pp2.apiKey",         // user's own key (or TRIAL_KEY_LABEL)
+    chat:       (id) => `pp2.chat.${id}`,
+    analysis:   (id) => `pp2.analysis.${id}`,
+    paper:      (id) => `pp2.paper.${id}`,
 };
 
-function storageSet(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-        // Quota exceeded or private browsing — persistence is best-effort.
-    }
+function ls_get(key) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+    catch { return null; }
+}
+function ls_set(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* quota */ }
+}
+function ls_del(key) {
+    try { localStorage.removeItem(key); } catch { }
 }
 
-function storageGet(key) {
-    try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : null;
-    } catch {
-        return null;
-    }
-}
+// ─── APP STATE ───────────────────────────────────────────────────────────────
+let groqApiKey        = "";
+let isTrialKey        = true;
+let selectedModel     = ls_get(SK.model) || "auto";
+let sessions          = [];          // [{id, filename, sectionCount, createdAt}]
+let activeSessionId   = null;
+let activeSectionIdx  = -1;
+let isProcessing      = false;
 
-function storageRemove(key) {
-    try {
-        localStorage.removeItem(key);
-    } catch { /* ignore */ }
-}
+// Per-session state (loaded when switching sessions)
+let appSections       = [];
+let currentView       = "reader";    // "reader" | "pdf"
 
-function persistPaper(filename) {
-    // Cap stored content so we stay well under the ~5MB localStorage quota.
-    const totalChars = appSections.reduce((n, s) => n + (s.content || "").length, 0);
-    if (totalChars > 3 * 1024 * 1024) return;
-    storageSet(STORAGE_KEYS.paper, { filename, sections: appSections });
-}
+// PDF viewer
+let pdfDocRef         = null;
+let pdfCurrentPage    = 1;
+let pdfZoomScale      = 1.5;
+let pdfRendering      = false;
 
-function persistChatHistory() {
-    const msgs = [];
-    chatHistory.querySelectorAll(".msg").forEach((el) => {
-        if (el.id === "welcome-msg") return;
-        const role = el.classList.contains("msg--user") ? "user" : "bot";
-        // Bots store the markdown source on the element; fall back to text
-        const body = el.querySelector(".msg-content");
-        const text = ((el.dataset.raw || body?.innerText) || "").trim();
-        if (text) msgs.push({ role, text });
-    });
-    storageSet(STORAGE_KEYS.chat, msgs.slice(-50));
-}
+// ─── ANALYSIS IN-FLIGHT GUARD ─────────────────────────────────────────────────
+const analysisInFlight = new Set();
 
-function restoreSession() {
-    const paper = storageGet(STORAGE_KEYS.paper);
-    if (paper && Array.isArray(paper.sections) && paper.sections.length > 0) {
-        appSections = paper.sections;
-        currentPaperKey = makePaperKey(paper.filename || "paper", appSections.length);
-        fileStatusText.textContent = paper.filename || "Restored paper";
-        fileStatus.classList.add("file-status--active");
-        renderSections(appSections);
-        showToast(`Restored "${paper.filename}" from local storage`, "info", 3000);
-    }
-
-    const chat = storageGet(STORAGE_KEYS.chat);
-    if (Array.isArray(chat)) {
-        chat.forEach(({ role, text }) => {
-            if ((role === "user" || role === "bot") && typeof text === "string") {
-                const msg = appendMessage(role, text);
-                // Re-render stored bot replies as formatted markdown
-                if (role === "bot") {
-                    const body = msg.querySelector(".msg-content");
-                    if (body) renderMarkdown(body, text);
-                }
-            }
-        });
-    }
-}
-
-// === Markdown Rendering (AI answers always render beautifully) ===
-function renderMarkdown(container, text) {
-    const source = text || "";
-    try {
-        const html = typeof marked !== "undefined" ? marked.parse(source) : source;
-        container.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(html) : html;
-    } catch {
-        container.textContent = source;
-    }
-    container.classList.add("markdown-body");
-}
-
-const SKELETON_HTML =
-    '<div class="skeleton-block"><div class="skeleton-line skeleton-line--full"></div>' +
-    '<div class="skeleton-line skeleton-line--80"></div><div class="skeleton-line skeleton-line--60"></div></div>';
-
-// === Model Selection ===
-let selectedModel = storageGet(STORAGE_KEYS.model) || "auto";
-
-async function initModelSelector() {
-    const FALLBACK_MODELS = [
-        { id: "auto", label: "Auto (recommended)" },
-        { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
-        { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
-        { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B" },
-        { id: "allam-2-7b", label: "ALLaM 2 7B" },
-    ];
-
-    let models = FALLBACK_MODELS;
-    try {
-        const res = await fetch(`${API_BASE}/api/models`);
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data.models) && data.models.length) {
-                models = data.models.map((m) => ({
-                    id: m.id,
-                    label: m.id === "auto" ? "Auto (recommended)" : m.label || m.id,
-                }));
-            }
-        }
-    } catch {
-        // Backend not reachable yet — the fallback list keeps the UI usable.
-    }
-
-    if (!modelSelect) return;
-    modelSelect.innerHTML = "";
-    models.forEach(({ id, label }) => {
-        const opt = document.createElement("option");
-        opt.value = id;
-        opt.textContent = label;
-        modelSelect.appendChild(opt);
-    });
-
-    const ids = new Set(models.map((m) => m.id));
-    selectedModel = ids.has(selectedModel) ? selectedModel : "auto";
-    modelSelect.value = selectedModel;
-}
-
-if (modelSelect) {
-    modelSelect.addEventListener("change", () => {
-        selectedModel = modelSelect.value;
-        storageSet(STORAGE_KEYS.model, selectedModel);
-        const label = modelSelect.selectedOptions[0]?.textContent || selectedModel;
-        showToast(`AI model: ${label}`, "info", 2500);
-    });
-}
-
-// === Toast Notifications ===
+// ─────────────────────────────────────────────────────────────────────────────
+//  TOASTS
+// ─────────────────────────────────────────────────────────────────────────────
 function showToast(message, type = "info", duration = 4000) {
     const container = $("toast-container");
     const toast = document.createElement("div");
@@ -226,26 +150,426 @@ function showToast(message, type = "info", duration = 4000) {
     }, duration);
 }
 
-// === Auto-resize textarea ===
-chatQuery.addEventListener("input", () => {
-    chatQuery.style.height = "36px";
-    chatQuery.style.height = Math.min(chatQuery.scrollHeight, 120) + "px";
-});
-
-// === Sidebar Toggle (mobile) ===
-sidebarToggle.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-});
-
-// Close sidebar on section click (mobile)
-function closeSidebarMobile() {
-    if (window.innerWidth <= 768) sidebar.classList.remove("open");
+// ─────────────────────────────────────────────────────────────────────────────
+//  MARKDOWN
+// ─────────────────────────────────────────────────────────────────────────────
+function renderMarkdown(container, text) {
+    const src = text || "";
+    try {
+        const html = typeof marked !== "undefined" ? marked.parse(src) : src;
+        container.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(html) : html;
+    } catch { container.textContent = src; }
+    container.classList.add("markdown-body");
 }
 
-// === Upload Flow ===
-uploadBtn.addEventListener("click", () => {
-    if (isProcessing) return;
-    fileInput.click();
+const SKELETON_HTML =
+    '<div class="skeleton-block"><div class="skeleton-line skeleton-line--full"></div>' +
+    '<div class="skeleton-line skeleton-line--80"></div><div class="skeleton-line skeleton-line--60"></div></div>';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  API KEY MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+let activeModalTab = "trial";
+
+function openApiKeyModal(forceShow = false) {
+    apiKeyModal.classList.remove("hidden");
+    // Pre-fill based on stored key type
+    const stored = ls_get(SK.apiKey);
+    if (stored && stored !== TRIAL_KEY_LABEL) {
+        // Check if it looks like it came from premium flow vs. own-key
+        const isPremiumStored = ls_get(SK.apiKey + "_type") === "premium";
+        if (isPremiumStored) {
+            switchModalTab("premium");
+            premiumKeyInput.value = stored;
+        } else {
+            switchModalTab("own");
+            modalKeyInput.value = stored;
+        }
+    } else {
+        switchModalTab("trial");
+    }
+}
+
+function closeApiKeyModal() {
+    apiKeyModal.classList.add("hidden");
+}
+
+function switchModalTab(tab) {
+    activeModalTab = tab;
+    tabTrial.classList.toggle("active", tab === "trial");
+    tabPremium.classList.toggle("active", tab === "premium");
+    tabOwn.classList.toggle("active", tab === "own");
+    panelTrial.classList.toggle("active", tab === "trial");
+    panelPremium.classList.toggle("active", tab === "premium");
+    panelOwn.classList.toggle("active", tab === "own");
+    // Update proceed button label
+    const proceedSpan = modalProceedBtn.querySelector("span");
+    if (proceedSpan) {
+        if (tab === "premium") proceedSpan.textContent = "Activate Premium Key";
+        else if (tab === "own") proceedSpan.textContent = "Save & Launch";
+        else proceedSpan.textContent = "Launch PaperPilot";
+    }
+}
+
+tabTrial.addEventListener("click",   () => switchModalTab("trial"));
+tabPremium.addEventListener("click", () => switchModalTab("premium"));
+tabOwn.addEventListener("click",     () => switchModalTab("own"));
+
+// Eye toggles
+modalKeyToggle.addEventListener("click", () => {
+    const show = modalKeyInput.type === "password";
+    modalKeyInput.type = show ? "text" : "password";
+});
+premiumKeyToggle.addEventListener("click", () => {
+    const show = premiumKeyInput.type === "password";
+    premiumKeyInput.type = show ? "text" : "password";
+});
+
+modalProceedBtn.addEventListener("click", () => {
+    if (activeModalTab === "trial") {
+        groqApiKey  = TRIAL_API_KEY;
+        isTrialKey  = true;
+        ls_set(SK.apiKey, TRIAL_KEY_LABEL);
+        ls_del(SK.apiKey + "_type");
+    } else if (activeModalTab === "premium") {
+        const key = premiumKeyInput.value.trim();
+        if (!key) {
+            showToast("Paste your premium key to activate it.", "error");
+            premiumKeyInput.focus();
+            return;
+        }
+        if (!key.startsWith("gsk_")) {
+            showToast("Premium key should be a valid Groq API key (starts with gsk_).", "error");
+            premiumKeyInput.focus();
+            return;
+        }
+        groqApiKey  = key;
+        isTrialKey  = false;
+        ls_set(SK.apiKey, key);
+        ls_set(SK.apiKey + "_type", "premium");
+    } else {
+        // own tab
+        const key = modalKeyInput.value.trim();
+        if (!key || !key.startsWith("gsk_")) {
+            showToast("Please enter a valid Groq API key (starts with gsk_).", "error");
+            modalKeyInput.focus();
+            return;
+        }
+        groqApiKey  = key;
+        isTrialKey  = false;
+        ls_set(SK.apiKey, key);
+        ls_del(SK.apiKey + "_type");
+    }
+    updateKeyStatusFooter();
+    closeApiKeyModal();
+    const messages = {
+        trial:   "Using built-in trial key \u26a1",
+        premium: "\u2b50 Premium key activated!",
+        own:     "Your API key saved \u2713",
+    };
+    showToast(messages[activeModalTab] || "Key saved", "success", 3000);
+});
+
+// API key settings button in sidebar footer
+apiKeySettingsBtn.addEventListener("click", () => openApiKeyModal(true));
+
+// Upgrade banner button → open modal on premium tab
+if (upgradeBannerBtn) {
+    upgradeBannerBtn.addEventListener("click", () => {
+        apiKeyModal.classList.remove("hidden");
+        switchModalTab("premium");
+    });
+}
+
+function updateKeyStatusFooter() {
+    if (!keyStatusFooter) return;
+    const type = ls_get(SK.apiKey + "_type");
+    if (isTrialKey) {
+        keyStatusFooter.textContent = "Trial Key";
+        keyStatusFooter.classList.remove("key-status--premium");
+        // Show upgrade banner for trial users
+        if (upgradeBanner) upgradeBanner.classList.remove("hidden");
+    } else if (type === "premium") {
+        keyStatusFooter.textContent = "\u2b50 Premium";
+        keyStatusFooter.classList.add("key-status--premium");
+        if (upgradeBanner) upgradeBanner.classList.add("hidden");
+    } else {
+        keyStatusFooter.textContent = "My Key \u2713";
+        keyStatusFooter.classList.remove("key-status--premium");
+        if (upgradeBanner) upgradeBanner.classList.add("hidden");
+    }
+}
+
+function initApiKey() {
+    const stored = ls_get(SK.apiKey);
+    if (!stored) {
+        // First visit — show modal
+        openApiKeyModal(true);
+        return;
+    }
+    if (stored === TRIAL_KEY_LABEL) {
+        groqApiKey = TRIAL_API_KEY;
+        isTrialKey = true;
+    } else {
+        groqApiKey = stored;
+        isTrialKey = false;
+    }
+    updateKeyStatusFooter();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODEL SELECTOR
+// ─────────────────────────────────────────────────────────────────────────────
+function initModelSelector() {
+    if (!modelSelect) return;
+    modelSelect.innerHTML = "";
+    Engine.MODELS.forEach(({ id, label, description }) => {
+        const opt = document.createElement("option");
+        opt.value = id; opt.textContent = label;
+        if (description) opt.title = description;
+        modelSelect.appendChild(opt);
+    });
+    const ids = new Set(Engine.MODELS.map((m) => m.id));
+    selectedModel = ids.has(selectedModel) ? selectedModel : "auto";
+    modelSelect.value = selectedModel;
+    modelSelect.addEventListener("change", () => {
+        selectedModel = modelSelect.value;
+        ls_set(SK.model, selectedModel);
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SESSION MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+function loadSessions() {
+    sessions = ls_get(SK.sessions) || [];
+}
+
+function saveSessions() {
+    ls_set(SK.sessions, sessions);
+}
+
+function generateSessionId() {
+    return "s_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+}
+
+function createSession(filename, sectionCount, rawSections) {
+    const id = generateSessionId();
+    const session = {
+        id, filename, sectionCount,
+        createdAt: new Date().toISOString(),
+    };
+    sessions.unshift(session); // newest first
+    saveSessions();
+
+    // Persist paper data
+    const totalChars = rawSections.reduce((n, s) => n + (s.content || "").length, 0);
+    if (totalChars < 3 * 1024 * 1024) {
+        ls_set(SK.paper(id), { filename, sections: rawSections });
+    }
+    return session;
+}
+
+function deleteSession(id) {
+    sessions = sessions.filter((s) => s.id !== id);
+    saveSessions();
+    ls_del(SK.paper(id));
+    ls_del(SK.chat(id));
+    ls_del(SK.analysis(id));
+    if (activeSessionId === id) {
+        activeSessionId = null;
+        activeSectionIdx = -1;
+        appSections = [];
+        pdfDocRef = null;
+        showWelcomeState();
+    }
+    renderSessionSidebar();
+}
+
+function clearAllSessions() {
+    sessions.forEach((s) => {
+        ls_del(SK.paper(s.id));
+        ls_del(SK.chat(s.id));
+        ls_del(SK.analysis(s.id));
+    });
+    sessions = [];
+    saveSessions();
+    activeSessionId = null;
+    activeSectionIdx = -1;
+    appSections = [];
+    pdfDocRef = null;
+    showWelcomeState();
+    renderSessionSidebar();
+}
+
+clearSessionsBtn.addEventListener("click", () => {
+    if (!sessions.length) return;
+    if (confirm("Clear all sessions? This cannot be undone.")) clearAllSessions();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENDER SESSION SIDEBAR
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSessionSidebar() {
+    sessionsList.innerHTML = "";
+    if (!sessions.length) {
+        sessionsList.appendChild(placeholderMsg);
+        placeholderMsg.style.display = "";
+        return;
+    }
+    placeholderMsg.style.display = "none";
+
+    sessions.forEach((sess, i) => {
+        const isActive = sess.id === activeSessionId;
+        const card = document.createElement("div");
+        card.className = "session-card" + (isActive ? " active" : "");
+        card.style.animationDelay = `${i * 40}ms`;
+        card.dataset.id = sess.id;
+
+        const date = new Date(sess.createdAt);
+        const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+        card.innerHTML = `
+            <div class="session-card-inner">
+                <div class="session-card-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M4 1a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V5.5L9.5 1H4zm5.5 1.5L13 6H10a.5.5 0 01-.5-.5V2.5z"/>
+                    </svg>
+                </div>
+                <div class="session-card-meta">
+                    <div class="session-card-name" title="${sess.filename}">${sess.filename}</div>
+                    <div class="session-card-info">${sess.sectionCount} sections · ${dateStr}</div>
+                </div>
+                <button class="session-card-delete" data-id="${sess.id}" title="Delete session">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>`;
+
+        // If active, render section list inside card
+        if (isActive && appSections.length) {
+            const secList = document.createElement("div");
+            secList.className = "session-sections-list";
+            appSections.forEach((sec, idx) => {
+                const item = document.createElement("div");
+                item.className = "session-section-item" + (idx === activeSectionIdx ? " active" : "");
+                item.textContent = sec.title;
+                item.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    switchToView("reader");
+                    loadSection(idx);
+                });
+                secList.appendChild(item);
+            });
+            card.appendChild(secList);
+        }
+
+        card.querySelector(".session-card-inner").addEventListener("click", () => {
+            activateSession(sess.id);
+        });
+        card.querySelector(".session-card-delete").addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteSession(sess.id);
+        });
+
+        sessionsList.appendChild(card);
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ACTIVATE A SESSION
+// ─────────────────────────────────────────────────────────────────────────────
+function activateSession(id) {
+    if (activeSessionId === id) return;
+
+    // Save current session state (section index)
+    if (activeSessionId) {
+        ls_set(SK.activeId + "_" + activeSessionId, activeSectionIdx);
+    }
+
+    activeSessionId = id;
+    ls_set(SK.activeId, id);
+
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+
+    // Load paper data
+    const paper = ls_get(SK.paper(id));
+    if (!paper || !paper.sections || !paper.sections.length) {
+        showToast("Session data not found. Please re-upload the PDF.", "error");
+        return;
+    }
+    appSections   = paper.sections;
+    activeSectionIdx = -1;
+    pdfDocRef     = null;
+    pdfCurrentPage = 1;
+
+    // Restore PDF if stored as base64
+    const pdfData = ls_get(SK.paper(id) + "_pdf");
+    if (pdfData) {
+        loadPdfFromBase64(pdfData, session.filename);
+    }
+
+    // Update top bar
+    sessionFilename.textContent = session.filename;
+    sessionSectionCount.textContent = `${session.sectionCount} sections`;
+    pdfToolbarFilename.textContent = session.filename;
+
+    // Show session view
+    showSessionView();
+    switchToView("reader");
+
+    // Render sections in the sections sidebar
+    renderSectionsSidebar(appSections);
+
+    // Restore chat
+    restoreChatForSession(id);
+
+    // Restore last viewed section
+    const lastIdx = ls_get(SK.activeId + "_" + id);
+    if (typeof lastIdx === "number" && lastIdx >= 0 && lastIdx < appSections.length) {
+        loadSection(lastIdx);
+    } else if (appSections.length) {
+        loadSection(0);
+    }
+
+    renderSessionSidebar();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW SWITCHING
+// ─────────────────────────────────────────────────────────────────────────────
+function showWelcomeState() {
+    welcomeState.classList.remove("hidden");
+    sessionView.classList.add("hidden");
+}
+function showSessionView() {
+    welcomeState.classList.add("hidden");
+    sessionView.classList.remove("hidden");
+}
+
+function switchToView(view) {
+    currentView = view;
+    tabReader.classList.toggle("active", view === "reader");
+    tabPdf.classList.toggle("active", view === "pdf");
+    readerSplit.classList.toggle("hidden", view !== "reader");
+    pdfViewPanel.classList.toggle("hidden", view !== "pdf");
+    if (view === "pdf" && pdfDocRef) renderPdfPage(pdfCurrentPage);
+    if (view === "pdf" && !pdfDocRef) {
+        showToast("PDF viewer: upload the paper again to see it here.", "info", 4000);
+        switchToView("reader");
+    }
+}
+
+tabReader.addEventListener("click", () => switchToView("reader"));
+tabPdf.addEventListener("click",   () => switchToView("pdf"));
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  UPLOAD FLOW
+// ─────────────────────────────────────────────────────────────────────────────
+[uploadBtn, welcomeUploadBtn].forEach((btn) => {
+    btn.addEventListener("click", () => { if (!isProcessing) fileInput.click(); });
 });
 
 fileInput.addEventListener("change", async (e) => {
@@ -254,68 +578,87 @@ fileInput.addEventListener("change", async (e) => {
 
     if (!file.name.toLowerCase().endsWith(".pdf")) {
         showToast("Please upload a PDF file.", "error");
-        fileInput.value = "";
-        return;
+        fileInput.value = ""; return;
     }
-
     if (file.size > 50 * 1024 * 1024) {
-        showToast("File too large. Maximum size is 50MB.", "error");
-        fileInput.value = "";
-        return;
+        showToast("File too large. Maximum size is 50 MB.", "error");
+        fileInput.value = ""; return;
     }
 
     isProcessing = true;
     uploadOverlay.classList.remove("hidden");
     uploadStatusTitle.textContent = "Processing Paper";
-    uploadStatusDetail.textContent = `Uploading ${file.name}...`;
-
-    const formData = new FormData();
-    formData.append("file", file);
+    uploadStatusDetail.textContent = `Reading ${file.name} in your browser...`;
 
     try {
-        uploadStatusDetail.textContent = "Parsing PDF and extracting sections...";
+        const buffer = await file.arrayBuffer();
 
-        const response = await fetch(`${API_BASE}/api/upload`, {
-            method: "POST",
-            body: formData,
-        });
+        // ── Clone the buffer BEFORE extractPdfText so PDF.js doesn't detach it ──
+        // PDF.js transfers (detaches) the underlying ArrayBuffer when it calls
+        // getDocument({data}), making any subsequent use of `buffer` throw
+        // "Cannot perform Construct on a detached ArrayBuffer".
+        // We keep one pristine copy for the PDF viewer.
+        const pdfViewerBuffer = buffer.slice(0);   // independent clone
 
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            let message = err.detail || `Upload failed (${response.status})`;
-            if (response.status === 404 && !err.detail) {
-                message = "Upload failed (404): the API endpoint was not found. "
-                    + "Is the backend running and up to date?";
+        // Extract text for AI (uses buffer — may get detached, that's fine)
+        const rawText = await Engine.extractPdfText(new Uint8Array(buffer));
+        if (!rawText) throw new Error("Could not extract text — the PDF may be scanned or image-only.");
+
+        uploadStatusDetail.textContent = "Splitting into sections...";
+        const sections = Engine.extractSections(rawText);
+        if (!sections.length) throw new Error("No recognizable sections found in this paper.");
+
+        await new Promise((r) => setTimeout(r, 300));
+
+        // Store PDF bytes as base64 for future session restores (use the clone)
+        uploadStatusDetail.textContent = "Preparing PDF viewer...";
+        try {
+            // Use a chunked approach to avoid call-stack overflow on large files
+            const pdfBytes = new Uint8Array(pdfViewerBuffer.slice(0));
+            const maxBytes = Math.min(pdfBytes.length, 4 * 1024 * 1024); // cap at 4 MB
+            let binary = "";
+            const chunkSize = 8192;
+            for (let i = 0; i < maxBytes; i += chunkSize) {
+                binary += String.fromCharCode(...pdfBytes.subarray(i, Math.min(i + chunkSize, maxBytes)));
             }
-            throw new Error(message);
+            window._pendingPdfBase64 = btoa(binary);
+        } catch { window._pendingPdfBase64 = null; }
+
+        // Create session
+        const session = createSession(file.name, sections.length, sections);
+
+        // Persist base64 PDF for future session restores
+        if (window._pendingPdfBase64) {
+            try { ls_set(SK.paper(session.id) + "_pdf", window._pendingPdfBase64); }
+            catch { /* localStorage quota exceeded — PDF viewer won't persist */ }
+            window._pendingPdfBase64 = null;
         }
 
-        const data = await response.json();
-        appSections = data.sections || [];
+        // Activate session
+        activeSessionId = session.id;
+        appSections     = sections;
+        activeSectionIdx = -1;
 
-        uploadStatusDetail.textContent = "Indexing into vector database...";
-        await new Promise((r) => setTimeout(r, 500));
+        // Load PDF viewer from the dedicated cloned buffer (never touched by extractPdfText)
+        await loadPdfFromBuffer(pdfViewerBuffer, file.name);
 
         // Update UI
-        fileStatusText.textContent = data.filename || file.name;
-        fileStatus.classList.add("file-status--active");
+        sessionFilename.textContent = file.name;
+        sessionSectionCount.textContent = `${sections.length} sections`;
+        pdfToolbarFilename.textContent = file.name;
 
-        // New paper -> clear stale chat/analysis and persist the session locally
-        chatHistory.querySelectorAll(".msg:not(#welcome-msg)").forEach((el) => el.remove());
-        storageRemove(STORAGE_KEYS.chat);
-        storageRemove(STORAGE_KEYS.analysis);
-        currentPaperKey = makePaperKey(data.filename || file.name, appSections.length);
-        persistPaper(data.filename || file.name);
+        showSessionView();
+        switchToView("reader");
+        renderSectionsSidebar(appSections);
+        clearChatHistory();
+        renderSessionSidebar();
 
-        renderSections(appSections);
-        showToast(`Loaded ${appSections.length} sections from ${file.name}`, "success");
-
-        if (appSections.length > 0) loadSection(0);
+        showToast(`✓ Loaded "${file.name}" (${sections.length} sections)`, "success");
+        if (sections.length) loadSection(0);
 
     } catch (err) {
         console.error("Upload error:", err);
-        showToast(err.message || "Upload failed. Check that the backend is running.", "error");
-        fileStatusText.textContent = "Upload failed";
+        showToast(err.message || "Could not read this PDF.", "error");
     } finally {
         isProcessing = false;
         uploadOverlay.classList.add("hidden");
@@ -323,67 +666,169 @@ fileInput.addEventListener("change", async (e) => {
     }
 });
 
-// === Render Sections ===
-function renderSections(sections) {
-    sectionsList.innerHTML = "";
-    if (placeholderMsg) placeholderMsg.style.display = "none";
+// ─────────────────────────────────────────────────────────────────────────────
+//  PDF VIEWER
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadPdfFromBuffer(buffer, filename) {
+    try {
+        const lib = window.pdfjsLib;
+        if (!lib) return;
+        if (lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc) {
+            lib.GlobalWorkerOptions.workerSrc =
+                "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        }
+        const bytes = new Uint8Array(buffer);
+        pdfDocRef = await lib.getDocument({ data: bytes }).promise;
+        pdfCurrentPage = 1;
+        pdfPageCount.textContent = pdfDocRef.numPages;
+        pdfPageNum.textContent   = 1;
+        pdfToolbarFilename.textContent = filename;
+        if (currentView === "pdf") renderPdfPage(1);
+    } catch (err) {
+        console.warn("PDF viewer init error:", err);
+        pdfDocRef = null;
+    }
+}
 
-    sections.forEach((sec, index) => {
-        const div = document.createElement("div");
-        div.className = "section-item";
-        div.textContent = sec.title;
-        div.dataset.index = index;
-        div.style.animationDelay = `${index * 60}ms`;
-        div.addEventListener("click", () => {
-            loadSection(index);
-            closeSidebarMobile();
+async function loadPdfFromBase64(base64, filename) {
+    try {
+        const lib = window.pdfjsLib;
+        if (!lib || !base64) return;
+        if (lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc) {
+            lib.GlobalWorkerOptions.workerSrc =
+                "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        }
+        const binary = atob(base64);
+        const bytes  = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        pdfDocRef = await lib.getDocument({ data: bytes }).promise;
+        pdfCurrentPage = 1;
+        pdfPageCount.textContent = pdfDocRef.numPages;
+        pdfPageNum.textContent   = 1;
+        pdfToolbarFilename.textContent = filename;
+    } catch (err) {
+        console.warn("PDF base64 load error:", err);
+        pdfDocRef = null;
+    }
+}
+
+async function renderPdfPage(pageNum) {
+    if (!pdfDocRef || pdfRendering) return;
+    pdfRendering = true;
+    try {
+        const page    = await pdfDocRef.getPage(pageNum);
+        const viewport= page.getViewport({ scale: pdfZoomScale });
+        pdfCanvas.width  = viewport.width;
+        pdfCanvas.height = viewport.height;
+        const ctx = pdfCanvas.getContext("2d");
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pdfPageNum.textContent = pageNum;
+    } catch (err) {
+        console.warn("PDF render error:", err);
+    } finally {
+        pdfRendering = false;
+    }
+}
+
+pdfPrevBtn.addEventListener("click", () => {
+    if (pdfCurrentPage > 1) { pdfCurrentPage--; renderPdfPage(pdfCurrentPage); }
+});
+pdfNextBtn.addEventListener("click", () => {
+    if (pdfDocRef && pdfCurrentPage < pdfDocRef.numPages) { pdfCurrentPage++; renderPdfPage(pdfCurrentPage); }
+});
+pdfZoomIn.addEventListener("click", () => {
+    pdfZoomScale = Math.min(pdfZoomScale + 0.25, 4);
+    pdfZoomLabel.textContent = Math.round(pdfZoomScale * 100) + "%";
+    renderPdfPage(pdfCurrentPage);
+});
+pdfZoomOut.addEventListener("click", () => {
+    pdfZoomScale = Math.max(pdfZoomScale - 0.25, 0.5);
+    pdfZoomLabel.textContent = Math.round(pdfZoomScale * 100) + "%";
+    renderPdfPage(pdfCurrentPage);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENDER SECTIONS SIDEBAR (inside reader)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSectionsSidebar(sections) {
+    sectionsList.innerHTML = "";
+    sections.forEach((sec, idx) => {
+        const item = document.createElement("div");
+        item.className = "section-item";
+        item.textContent = sec.title;
+        item.dataset.index = idx;
+        item.style.animationDelay = `${idx * 40}ms`;
+        item.addEventListener("click", () => {
+            loadSection(idx);
+            if (window.innerWidth <= 768) {
+                $("sidebar").classList.remove("open");
+            }
         });
-        sectionsList.appendChild(div);
+        sectionsList.appendChild(item);
     });
 }
 
-// === Load Section ===
+// ─────────────────────────────────────────────────────────────────────────────
+//  LOAD SECTION
+// ─────────────────────────────────────────────────────────────────────────────
 async function loadSection(index) {
-    if (index === activeSectionIndex) return;
-    activeSectionIndex = index;
+    if (index === activeSectionIdx) return;
+    activeSectionIdx = index;
 
-    // Update sidebar active
+    // Sync both sections sidebars
     document.querySelectorAll(".section-item").forEach((el) => el.classList.remove("active"));
-    const activeEl = document.querySelector(`.section-item[data-index='${index}']`);
-    if (activeEl) activeEl.classList.add("active");
+    document.querySelectorAll(`.section-item[data-index='${index}']`).forEach((el) => el.classList.add("active"));
+    document.querySelectorAll(".session-section-item").forEach((el, i) => {
+        el.classList.toggle("active", i === index);
+    });
 
     const section = appSections[index];
     if (!section) return;
 
-    // Switch from welcome to reading view
-    welcomeState.classList.add("hidden");
+    // Switch to reading view
+    readingPlaceholder.classList.add("hidden");
     readingView.classList.remove("hidden");
 
-    // Reset analysis
+    // Clear & animate
     analysisPanel.classList.add("hidden");
     aiExplanation.innerHTML = SKELETON_HTML;
     aiCritique.innerHTML = "";
-
-    // Animate content transition
     readingView.style.opacity = "0";
-    readingView.style.transform = "translateY(8px)";
+    readingView.style.transform = "translateY(10px)";
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 100));
 
     sectionNumber.textContent = `Section ${index + 1} of ${appSections.length}`;
-    sectionTitle.textContent = section.title;
+    sectionTitle.textContent  = section.title;
     sectionContent.textContent = section.content;
 
     readingView.style.transition = "opacity 0.4s ease, transform 0.4s ease";
-    readingView.style.opacity = "1";
-    readingView.style.transform = "translateY(0)";
+    readingView.style.opacity    = "1";
+    readingView.style.transform  = "translateY(0)";
 
-    // Show analysis panel and fetch AI analysis (cached when possible)
     analysisPanel.classList.remove("hidden");
     fetchAnalysis(section, index);
+
+    // Persist last viewed section
+    if (activeSessionId) ls_set(SK.activeId + "_" + activeSessionId, index);
 }
 
-// === AI Section Analysis (cached, guarded, retryable) ===
+// ─────────────────────────────────────────────────────────────────────────────
+//  AI ANALYSIS
+// ─────────────────────────────────────────────────────────────────────────────
+function getCachedAnalysis(index) {
+    if (!activeSessionId) return null;
+    const store = ls_get(SK.analysis(activeSessionId));
+    if (!store || !store[index]) return null;
+    return store[index];
+}
+function setCachedAnalysis(index, data) {
+    if (!activeSessionId) return;
+    const store = ls_get(SK.analysis(activeSessionId)) || {};
+    store[index] = { explanation: data.explanation || "", critique: data.critique || "" };
+    ls_set(SK.analysis(activeSessionId), store);
+}
+
 function renderAnalysis(explanation, critique) {
     renderMarkdown(aiExplanation, explanation || "No explanation available.");
     if (critique) {
@@ -391,146 +836,147 @@ function renderAnalysis(explanation, critique) {
     } else {
         aiCritique.innerHTML = '<p class="ai-muted">No critique available for this section.</p>';
     }
-    aiCritique.style.animation = "fadeIn 0.6s ease";
 }
 
 function showAnalysisError(section, index, message) {
-    const isRateLimit = /rate.?limit|429|busy/i.test(message || "");
-    const friendly = isRateLimit
-        ? "The AI is briefly at its free-tier limit. Wait a few seconds, then retry."
-        : "The analysis could not be generated right now.";
-
     aiExplanation.innerHTML = "";
     aiCritique.innerHTML = "";
-
     const wrap = document.createElement("div");
     wrap.className = "ai-error";
     const span = document.createElement("span");
-    span.textContent = friendly;
+    span.textContent = message || "Analysis could not be generated.";
     const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "retry-btn";
-    btn.textContent = "Retry";
+    btn.type = "button"; btn.className = "retry-btn"; btn.textContent = "Retry";
     btn.addEventListener("click", () => {
         aiExplanation.innerHTML = SKELETON_HTML;
         fetchAnalysis(section, index, true);
     });
-    wrap.appendChild(span);
-    wrap.appendChild(btn);
+    wrap.appendChild(span); wrap.appendChild(btn);
     aiExplanation.appendChild(wrap);
 }
 
 async function fetchAnalysis(section, index, force = false) {
-    if (activeSectionIndex !== index) return;
-
+    if (activeSectionIdx !== index) return;
     if (!force) {
         const cached = getCachedAnalysis(index);
-        if (cached) {
-            renderAnalysis(cached.explanation, cached.critique);
-            return;
-        }
+        if (cached) { renderAnalysis(cached.explanation, cached.critique); return; }
     }
-    if (analysisInFlight.has(index)) return; // avoid duplicate calls
+    if (analysisInFlight.has(index)) return;
+
+    if (!groqApiKey) {
+        showAnalysisError(section, index, "Set your Groq API key to enable AI analysis.");
+        return;
+    }
+
     analysisInFlight.add(index);
-
     try {
-        const res = await fetch(`${API_BASE}/api/explain_text`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                text: section.content,
-                title: section.title,
-                model: selectedModel,
-            }),
+        const data = await Engine.analyzeSection({
+            key: groqApiKey, title: section.title,
+            content: section.content, model: selectedModel,
         });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || `Analysis failed (${res.status})`);
-        }
-
-        const data = await res.json();
         setCachedAnalysis(index, data);
-        if (activeSectionIndex !== index) return; // user moved to another section
-
+        if (activeSectionIdx !== index) return;
         aiExplanation.innerHTML = "";
         renderAnalysis(data.explanation, data.critique);
     } catch (err) {
         console.error("Analysis error:", err);
-        if (activeSectionIndex !== index) return;
+        if (activeSectionIdx !== index) return;
         showAnalysisError(section, index, err.message);
     } finally {
         analysisInFlight.delete(index);
     }
 }
 
-// === Chat Logic ===
+// ─────────────────────────────────────────────────────────────────────────────
+//  CHAT
+// ─────────────────────────────────────────────────────────────────────────────
+function clearChatHistory() {
+    const toRemove = chatHistory.querySelectorAll(".msg:not(#welcome-msg)");
+    toRemove.forEach((el) => el.remove());
+    if (activeSessionId) ls_del(SK.chat(activeSessionId));
+}
+
+function persistChatHistory() {
+    if (!activeSessionId) return;
+    const msgs = [];
+    chatHistory.querySelectorAll(".msg").forEach((el) => {
+        if (el.id === "welcome-msg") return;
+        const role = el.classList.contains("msg--user") ? "user" : "bot";
+        const body = el.querySelector(".msg-content");
+        const text = ((el.dataset.raw || body?.innerText) || "").trim();
+        if (text) msgs.push({ role, text });
+    });
+    ls_set(SK.chat(activeSessionId), msgs.slice(-50));
+}
+
+function restoreChatForSession(id) {
+    chatHistory.querySelectorAll(".msg:not(#welcome-msg)").forEach((el) => el.remove());
+    const msgs = ls_get(SK.chat(id));
+    if (!Array.isArray(msgs)) return;
+    msgs.forEach(({ role, text }) => {
+        if ((role === "user" || role === "bot") && typeof text === "string") {
+            const msg = appendMessage(role, text);
+            if (role === "bot") renderMarkdown(msg.querySelector(".msg-content"), text);
+        }
+    });
+}
+
+chatClearBtn.addEventListener("click", () => {
+    clearChatHistory();
+    showToast("Chat cleared", "info", 2000);
+});
+
 sendChatBtn.addEventListener("click", sendMessage);
 chatQuery.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+chatQuery.addEventListener("input", () => {
+    chatQuery.style.height = "34px";
+    chatQuery.style.height = Math.min(chatQuery.scrollHeight, 110) + "px";
 });
 
 async function sendMessage() {
     const text = chatQuery.value.trim();
     if (!text || isProcessing) return;
 
+    if (!appSections.length) {
+        showToast("Upload a PDF first to start chatting.", "info");
+        return;
+    }
+    if (!groqApiKey) {
+        showToast("Set your Groq API key to enable chat.", "error");
+        openApiKeyModal(true);
+        return;
+    }
+
     appendMessage("user", text);
     chatQuery.value = "";
-    chatQuery.style.height = "36px";
+    chatQuery.style.height = "34px";
 
     chatStatus.textContent = "Thinking...";
     chatStatus.style.color = "var(--warning)";
 
     const botMsg = appendMessage("bot", "");
     const contentEl = botMsg.querySelector(".msg-content");
-    contentEl.innerHTML = '<span class="loading-text" style="color:var(--text-muted)">Analyzing your question...</span>';
-
-    // Send the paper context with the question so the backend can retrieve
-    // relevant passages statelessly — no cloud vector database needed.
-    const payload = { query: text, model: selectedModel };
-    if (appSections.length > 0) {
-        payload.sections = appSections.map(({ title, content }) => ({ title, content }));
-    }
+    contentEl.innerHTML = '<span class="loading-text" style="color:var(--text-muted)">Analyzing...</span>';
 
     try {
-        const res = await fetch(`${API_BASE}/api/ask`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+        const { answer, sources } = await Engine.askAboutPaper({
+            key: groqApiKey, query: text,
+            sections: appSections, model: selectedModel,
         });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            const detail = typeof err.detail === "string" ? err.detail : "";
-            throw new Error(detail || `The request failed (${res.status}). Please try again.`);
-        }
-
-        const data = await res.json();
-
-        // Build reply (markdown) and render it formatted
-        let reply = data.answer || "I couldn't generate a response.";
-        if (data.sources && data.sources.length > 0) {
-            reply += "\n\n**Sources:** " + data.sources.join(", ");
-        }
-
+        let reply = answer || "I couldn't generate a response.";
+        if (sources && sources.length) reply += "\n\n**Sources:** " + sources.join(", ");
         botMsg.dataset.raw = reply;
         renderMarkdown(contentEl, reply);
         chatHistory.scrollTop = chatHistory.scrollHeight;
-
     } catch (err) {
         console.error("Chat error:", err);
-        const isRateLimit = /rate.?limit|429|busy/i.test(err.message || "");
-        const friendly = isRateLimit
-            ? "The AI is briefly at its free-tier limit. Please resend your question in a few seconds."
-            : err.message || "Something went wrong. Please try again.";
         botMsg.dataset.raw = "";
         contentEl.innerHTML = "";
         const errSpan = document.createElement("span");
         errSpan.style.color = "var(--error)";
-        errSpan.textContent = friendly;
+        errSpan.textContent = err.message || "Something went wrong.";
         contentEl.appendChild(errSpan);
     } finally {
         chatStatus.textContent = "Ready";
@@ -546,13 +992,12 @@ function appendMessage(role, text) {
     const avatar = document.createElement("div");
     avatar.className = "msg-avatar";
     avatar.innerHTML = role === "bot"
-        ? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 4.5a1 1 0 11-2 0 1 1 0 012 0zM6.5 7A.5.5 0 017 6.5h1a.5.5 0 01.5.5v3.5a.5.5 0 01-1 0V7.5H7a.5.5 0 01-.5-.5z"/></svg>'
-        : '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-5 6s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/></svg>';
+        ? '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 4.5a1 1 0 11-2 0 1 1 0 012 0zM6.5 7A.5.5 0 017 6.5h1a.5.5 0 01.5.5v3.5a.5.5 0 01-1 0V7.5H7a.5.5 0 01-.5-.5z"/></svg>'
+        : '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-5 6s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/></svg>';
 
     const content = document.createElement("div");
     content.className = "msg-content";
     if (text) {
-        // Split on newlines so multi-line messages render paragraphs correctly.
         text.split("\n").forEach((line) => {
             if (!line.trim()) return;
             const p = document.createElement("p");
@@ -565,23 +1010,46 @@ function appendMessage(role, text) {
     msg.appendChild(content);
     chatHistory.appendChild(msg);
     chatHistory.scrollTop = chatHistory.scrollHeight;
-
     return msg;
 }
 
-// === Keyboard Shortcuts ===
-document.addEventListener("keydown", (e) => {
-    // Ctrl+U to upload
-    if ((e.ctrlKey || e.metaKey) && e.key === "u") {
-        e.preventDefault();
-        uploadBtn.click();
-    }
-    // Escape to close sidebar on mobile
-    if (e.key === "Escape") {
-        sidebar.classList.remove("open");
-    }
+// Chat panel toggle (mobile)
+chatToggleBtn.addEventListener("click", () => {
+    const chatPanel = $("chat-panel");
+    chatPanel.classList.toggle("open");
 });
 
-// === Startup: restore the previous session from local storage ===
-restoreSession();
+// ─────────────────────────────────────────────────────────────────────────────
+//  SIDEBAR (mobile toggle + collapse)
+// ─────────────────────────────────────────────────────────────────────────────
+$("sidebar-toggle").addEventListener("click", () => {
+    $("sidebar").classList.toggle("open");
+});
+document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "u") { e.preventDefault(); fileInput.click(); }
+    if (e.key === "Escape") { $("sidebar").classList.remove("open"); closeApiKeyModal(); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RESTORE SESSION ON LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+function restoreActiveSession() {
+    const lastId = ls_get(SK.activeId);
+    if (!lastId) return;
+    const session = sessions.find((s) => s.id === lastId);
+    if (session) activateSession(lastId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STARTUP
+// ─────────────────────────────────────────────────────────────────────────────
 initModelSelector();
+initApiKey();
+loadSessions();
+renderSessionSidebar();
+
+if (sessions.length) {
+    restoreActiveSession();
+} else {
+    showWelcomeState();
+}

@@ -7,7 +7,7 @@
     <title>PaperPilot AI — Intelligent Research Copilot</title>
     <meta name="description"
         content="PaperPilot AI is an intelligent research assistant that explains, critiques, and answers questions about academic papers using advanced AI.">
-    <meta name="theme-color" content="#0f0f1a">
+    <meta name="theme-color" content="#080812">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,299 +30,471 @@
         <div class="mesh-orb mesh-orb--1"></div>
         <div class="mesh-orb mesh-orb--2"></div>
         <div class="mesh-orb mesh-orb--3"></div>
+        <div class="mesh-orb mesh-orb--4"></div>
+    </div>
+
+    <!-- ===== API KEY MODAL ===== -->
+    <div class="modal-backdrop" id="api-key-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-card">
+            <div class="modal-hero">
+                <div class="modal-logo">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <defs>
+                            <linearGradient id="ml" x1="0" y1="0" x2="48" y2="48">
+                                <stop offset="0%" stop-color="#a78bfa" />
+                                <stop offset="100%" stop-color="#6366f1" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="48" height="48" rx="14" fill="url(#ml)" />
+                        <path d="M14 12h20a4 4 0 014 4v16a4 4 0 01-4 4H14a4 4 0 01-4-4V16a4 4 0 014-4zm4 8h12m-12 5h12m-12 5h8" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                    </svg>
+                </div>
+                <h2 id="modal-title">Welcome to PaperPilot AI</h2>
+                <p>Your intelligent research copilot. Powered by Groq's blazing-fast LLMs.</p>
+            </div>
+
+                        <div class="modal-body">
+                <div class="key-option-tabs" id="key-option-tabs">
+                    <button class="key-tab active" id="tab-trial" data-tab="trial">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        Free Trial
+                    </button>
+                    <button class="key-tab key-tab--premium" id="tab-premium" data-tab="premium">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Go Premium
+                    </button>
+                    <button class="key-tab" id="tab-own" data-tab="own">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                        My Key
+                    </button>
+                </div>
+
+                <!-- Trial Tab -->
+                <div class="key-tab-panel active" id="panel-trial">
+                    <div class="trial-info-box">
+                        <div class="trial-icon">&#x26a1;</div>
+                        <div>
+                            <strong>Free trial included!</strong>
+                            <span>Use the built-in key to explore PaperPilot. Shared rate limits apply.</span>
+                        </div>
+                    </div>
+                    <ul class="trial-limits">
+                        <li><span class="limit-dot limit-dot--ok"></span> Full AI explanations &amp; critiques</li>
+                        <li><span class="limit-dot limit-dot--ok"></span> Interactive Q&amp;A on any section</li>
+                        <li><span class="limit-dot limit-dot--warn"></span> Shared rate limit &mdash; may be slow</li>
+                        <li><span class="limit-dot limit-dot--warn"></span> Standard model quality</li>
+                    </ul>
+                </div>
+
+                <!-- Premium Tab -->
+                <div class="key-tab-panel" id="panel-premium">
+                    <div class="premium-plans">
+                        <div class="plan-card plan-card--free">
+                            <div class="plan-name">Free</div>
+                            <div class="plan-price">&#x20b9;0</div>
+                            <ul class="plan-features">
+                                <li class="feat--ok">All core features</li>
+                                <li class="feat--warn">Shared rate limits</li>
+                                <li class="feat--warn">Standard models</li>
+                            </ul>
+                        </div>
+                        <div class="plan-card plan-card--premium">
+                            <div class="plan-badge">BEST</div>
+                            <div class="plan-name">Premium</div>
+                            <div class="plan-price">&#x20b9;2000 <span>one-time</span></div>
+                            <ul class="plan-features">
+                                <li class="feat--ok">Dedicated API key</li>
+                                <li class="feat--ok">Priority responses</li>
+                                <li class="feat--ok">No rate limits</li>
+                                <li class="feat--ok">Best AI models</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <a class="razorpay-btn" href="https://razorpay.me/@yuvrajchopra" target="_blank" rel="noopener" id="razorpay-pay-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                        Pay &#x20b9;2000 via Razorpay
+                    </a>
+                    <p class="razorpay-hint">
+                        After payment, email <strong>yuvrajchopra19@gmail.com</strong> with your transaction ID. You&rsquo;ll receive your premium key within a few hours.
+                    </p>
+                    <div class="premium-key-section">
+                        <label class="key-field-label" for="premium-key-input">Already have a premium key?</label>
+                        <div class="key-field-wrapper">
+                            <input id="premium-key-input" type="password" placeholder="Paste your premium key here..." autocomplete="off" spellcheck="false" class="key-field-input">
+                            <button type="button" id="premium-key-toggle" class="key-field-eye" aria-label="Toggle visibility">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+                        <p class="key-field-hint">Enter the Groq API key emailed to you after payment.</p>
+                    </div>
+                </div>
+
+                <!-- Own Key Tab -->
+                <div class="key-tab-panel" id="panel-own">
+                    <label class="key-field-label" for="modal-key-input">
+                        Your Groq API Key
+                        <a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="key-get-link">Get free key &rarr;</a>
+                    </label>
+                    <div class="key-field-wrapper">
+                        <input id="modal-key-input" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false" class="key-field-input">
+                        <button type="button" id="modal-key-toggle" class="key-field-eye" aria-label="Toggle visibility">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="key-field-hint">Stored only in your browser&rsquo;s localStorage. Never sent to our servers.</p>
+                </div>
+
+                <button class="modal-cta" id="modal-proceed-btn">
+                    <span>Launch PaperPilot</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="app-container" id="app-container">
 
-        <!-- Sidebar -->
+        <!-- ===== SIDEBAR ===== -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-inner">
                 <!-- Logo -->
                 <div class="logo-area" id="logo-area">
                     <div class="logo-icon">
-                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
                             <defs>
-                                <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
-                                    <stop offset="0%" stop-color="#818cf8" />
+                                <linearGradient id="logo-grad" x1="0" y1="0" x2="34" y2="34">
+                                    <stop offset="0%" stop-color="#a78bfa" />
                                     <stop offset="100%" stop-color="#6366f1" />
                                 </linearGradient>
                             </defs>
-                            <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
-                            <path d="M10 8h12v2H10V8zm0 4h12v2H10v-2zm0 4h8v2H10v-2zm0 4h10v2H10v-2z"
-                                fill="rgba(255,255,255,0.9)" />
+                            <rect width="34" height="34" rx="10" fill="url(#logo-grad)" />
+                            <path d="M10 9h14v2H10V9zm0 4h14v2H10v-2zm0 4h9v2H10v-2zm0 4h11v2H10v-2z"
+                                fill="rgba(255,255,255,0.95)" />
                         </svg>
                     </div>
                     <div class="logo-text">
                         <h1>PaperPilot</h1>
                         <span class="logo-badge">AI Research Copilot</span>
                     </div>
+                    <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" aria-label="Collapse sidebar">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
                 </div>
 
-                <!-- File Status -->
-                <div class="file-status-area">
-                    <div id="file-status" class="file-status file-status--empty">
-                        <svg class="file-status-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path
-                                d="M3.5 2A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14h9a1.5 1.5 0 001.5-1.5V6.621a1.5 1.5 0 00-.44-1.06L10.94 2.94A1.5 1.5 0 009.878 2.5H3.5z" />
-                        </svg>
-                        <span id="file-status-text">No paper loaded</span>
-                    </div>
-                </div>
-
-                <!-- Upload -->
+                <!-- New Session Button -->
                 <button id="upload-btn" class="upload-btn">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                            clip-rule="evenodd" />
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                     </svg>
-                    Upload PDF
+                    New Session
                 </button>
                 <input type="file" id="file-input" accept=".pdf" hidden>
 
-                <!-- Model Selector -->
-                <div class="model-selector">
-                    <label for="model-select" class="model-label">AI Model</label>
-                    <div class="model-select-wrapper">
-                        <select id="model-select" class="model-select" title="Choose which AI model answers you">
-                            <option value="auto">Auto (recommended)</option>
-                        </select>
-                        <svg class="model-select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                            <path d="M2 4l4 4 4-4" />
-                        </svg>
+                <!-- Upgrade Banner (hidden for premium users) -->
+                <div class="upgrade-banner" id="upgrade-banner">
+                    <div class="upgrade-banner-top">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <span>Upgrade to Premium</span>
                     </div>
+                    <p>Faster responses &amp; no rate limits for just ₹2000.</p>
+                    <button class="upgrade-banner-btn" id="upgrade-banner-btn">Upgrade — ₹2000</button>
                 </div>
 
-                <!-- Sections List -->
+                <!-- Sessions List -->
                 <nav class="sections-nav" id="sections-nav">
-                    <div class="sections-label">Paper Sections</div>
-                    <div class="sections-list" id="sections-list">
+                    <div class="sections-label">
+                        <span>Sessions</span>
+                        <button class="clear-sessions-btn" id="clear-sessions-btn" title="Clear all sessions">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                    </div>
+                    <div class="sessions-list" id="sessions-list">
                         <div class="placeholder-msg" id="placeholder-msg">
-                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor"
-                                stroke-width="1.5">
+                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
                                 <rect x="8" y="6" width="32" height="36" rx="4" />
                                 <line x1="14" y1="14" x2="34" y2="14" />
                                 <line x1="14" y1="20" x2="34" y2="20" />
                                 <line x1="14" y1="26" x2="28" y2="26" />
                                 <line x1="14" y1="32" x2="30" y2="32" />
                             </svg>
-                            <span>Upload a research paper to see its sections</span>
+                            <span>No sessions yet.<br>Upload a PDF to start.</span>
                         </div>
                     </div>
                 </nav>
 
                 <!-- Sidebar Footer -->
                 <div class="sidebar-footer" id="sidebar-footer">
-                    <span>Built by <strong>Yuvraj Chopra</strong></span>
+                    <button class="api-key-settings-btn" id="api-key-settings-btn" title="API Key Settings">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                        <span id="key-status-footer">API Key</span>
+                    </button>
+                    <span class="footer-sep">·</span>
+                    <span>By <strong>Yuvraj Chopra</strong></span>
                 </div>
             </div>
         </aside>
 
         <!-- Mobile Sidebar Toggle -->
         <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
         </button>
 
-        <!-- Main Content -->
+        <!-- ===== MAIN CONTENT ===== -->
         <main class="main-content" id="main-content">
 
-            <!-- Reader Panel -->
-            <section class="reader-panel" id="reader-panel">
-                <div class="reader-scroll" id="reader-scroll">
-
-                    <!-- Welcome State -->
-                    <div class="welcome-state" id="welcome-state">
-                        <div class="welcome-icon">
-                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                                <defs>
-                                    <linearGradient id="welcome-grad" x1="0" y1="0" x2="80" y2="80">
-                                        <stop offset="0%" stop-color="#818cf8" />
-                                        <stop offset="50%" stop-color="#6366f1" />
-                                        <stop offset="100%" stop-color="#4f46e5" />
-                                    </linearGradient>
-                                </defs>
-                                <rect width="80" height="80" rx="20" fill="url(#welcome-grad)" opacity="0.15" />
-                                <path
-                                    d="M24 18h32a4 4 0 014 4v36a4 4 0 01-4 4H24a4 4 0 01-4-4V22a4 4 0 014-4zm6 12h20m-20 6h20m-20 6h14m-14 6h16"
-                                    stroke="url(#welcome-grad)" stroke-width="2.5" stroke-linecap="round" fill="none" />
-                            </svg>
-                        </div>
-                        <h2>Welcome to PaperPilot</h2>
-                        <p>Upload a research paper to get AI-powered explanations, critiques, and answers.</p>
-                        <div class="welcome-features">
-                            <div class="welcome-feature">
-                                <span class="feature-icon" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z" />
-                                        <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
-                                    </svg>
-                                </span>
-                                <span>Smart Sectioning</span>
-                            </div>
-                            <div class="welcome-feature">
-                                <span class="feature-icon" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path d="M9 18h6" />
-                                        <path d="M10 22h4" />
-                                        <path
-                                            d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z" />
-                                    </svg>
-                                </span>
-                                <span>AI Explanations</span>
-                            </div>
-                            <div class="welcome-feature">
-                                <span class="feature-icon" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <circle cx="11" cy="11" r="7" />
-                                        <line x1="21" y1="21" x2="16.5" y2="16.5" />
-                                    </svg>
-                                </span>
-                                <span>Critical Analysis</span>
-                            </div>
-                            <div class="welcome-feature">
-                                <span class="feature-icon" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path d="M21 11.5a8.38 8.38 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.2a8.4 8.4 0 1 1 16.1-4.3z" />
-                                    </svg>
-                                </span>
-                                <span>Interactive Q&A</span>
-                            </div>
-                        </div>
+            <!-- Welcome / No-session state -->
+            <div class="welcome-state" id="welcome-state">
+                <div class="welcome-icon">
+                    <svg width="90" height="90" viewBox="0 0 90 90" fill="none">
+                        <defs>
+                            <linearGradient id="wg" x1="0" y1="0" x2="90" y2="90">
+                                <stop offset="0%" stop-color="#a78bfa"/>
+                                <stop offset="50%" stop-color="#6366f1"/>
+                                <stop offset="100%" stop-color="#4f46e5"/>
+                            </linearGradient>
+                        </defs>
+                        <rect width="90" height="90" rx="24" fill="url(#wg)" opacity="0.12"/>
+                        <path d="M26 20h38a5 5 0 015 5v40a5 5 0 01-5 5H26a5 5 0 01-5-5V25a5 5 0 015-5zm8 14h22m-22 8h22m-22 8h16m-16 8h18"
+                            stroke="url(#wg)" stroke-width="3" stroke-linecap="round" fill="none"/>
+                    </svg>
+                </div>
+                <h2>Start Researching</h2>
+                <p>Upload a research paper to unlock AI-powered explanations, critiques, and interactive Q&amp;A.</p>
+                <button class="welcome-upload-btn" id="welcome-upload-btn">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                    </svg>
+                    Upload PDF
+                </button>
+                <div class="welcome-features">
+                    <div class="welcome-feature">
+                        <span class="feature-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>
+                        </span>
+                        <span>Smart Sectioning</span>
                     </div>
-
-                    <!-- Active Reading View (hidden initially) -->
-                    <div class="reading-view hidden" id="reading-view">
-                        <div class="section-header" id="section-header">
-                            <div class="section-number" id="section-number"></div>
-                            <h2 id="section-title"></h2>
-                        </div>
-
-                        <article class="section-body" id="section-content"></article>
-
-                        <!-- AI Analysis -->
-                        <div class="analysis-panel hidden" id="analysis-panel">
-                            <!-- Explanation Card -->
-                            <div class="analysis-card" id="explanation-card">
-                                <div class="analysis-card-header">
-                                    <div class="analysis-card-icon analysis-card-icon--explain">
-                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd"
-                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                                clip-rule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <h3>AI Explanation</h3>
-                                </div>
-                                <div class="analysis-card-body" id="ai-explanation">
-                                    <div class="skeleton-block">
-                                        <div class="skeleton-line skeleton-line--full"></div>
-                                        <div class="skeleton-line skeleton-line--80"></div>
-                                        <div class="skeleton-line skeleton-line--60"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Critique Card -->
-                            <div class="analysis-card" id="critique-card">
-                                <div class="analysis-card-header">
-                                    <div class="analysis-card-icon analysis-card-icon--critique">
-                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd"
-                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"
-                                                clip-rule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <h3>Critique &amp; Analysis</h3>
-                                </div>
-                                <div class="analysis-card-body markdown-body" id="ai-critique"></div>
-                            </div>
-                        </div>
+                    <div class="welcome-feature">
+                        <span class="feature-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2V17a1 1 0 001 1h4a1 1 0 001-1v-.3c0-.8.4-1.5 1-2A7 7 0 0012 2z"/><path d="M9 18h6m-3 3v-3"/></svg>
+                        </span>
+                        <span>AI Explanations</span>
+                    </div>
+                    <div class="welcome-feature">
+                        <span class="feature-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                        </span>
+                        <span>Critical Analysis</span>
+                    </div>
+                    <div class="welcome-feature">
+                        <span class="feature-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-9 8.4 8.5 8.5 0 01-3.8-.9L3 21l1.9-5.2a8.4 8.4 0 1116.1-4.3z"/></svg>
+                        </span>
+                        <span>Interactive Q&amp;A</span>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            <!-- Chat Panel -->
-            <section class="chat-panel" id="chat-panel">
-                <div class="chat-header" id="chat-header">
-                    <div class="chat-header-left">
-                        <div class="chat-avatar">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd"
-                                    d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
-                                    clip-rule="evenodd" />
+            <!-- ===== SESSION VIEW (shown when a session is active) ===== -->
+            <div class="session-view hidden" id="session-view">
+
+                <!-- Top bar with session info + tab switcher -->
+                <div class="session-topbar" id="session-topbar">
+                    <div class="session-info">
+                        <div class="session-file-icon">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 1a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V5.5L9.5 1H4zm5.5 1.5L13 6H10a.5.5 0 01-.5-.5V2.5z"/>
                             </svg>
                         </div>
-                        <div>
-                            <h3>Research Assistant</h3>
-                            <span class="chat-status" id="chat-status">Ready</span>
+                        <span class="session-filename" id="session-filename">paper.pdf</span>
+                        <span class="session-pill" id="session-section-count"></span>
+                    </div>
+                    <div class="view-tabs" id="view-tabs">
+                        <button class="view-tab active" id="tab-reader" data-view="reader">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>
+                            Reader
+                        </button>
+                        <button class="view-tab" id="tab-pdf" data-view="pdf">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-8-4h5m-5 8h6"/></svg>
+                            PDF View
+                        </button>
+                    </div>
+                    <div class="model-select-compact">
+                        <select id="model-select" class="model-select-inline" title="Choose AI model">
+                            <option value="auto">Auto Model</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Content area -->
+                <div class="session-content-area" id="session-content-area">
+
+                    <!-- ===== Reader Panel ===== -->
+                    <div class="reader-split" id="reader-split">
+                        <!-- Sections sidebar inside reader -->
+                        <div class="sections-sidebar" id="sections-sidebar">
+                            <div class="sections-sidebar-header">Sections</div>
+                            <div class="sections-list" id="sections-list"></div>
+                        </div>
+
+                        <!-- Reading area -->
+                        <section class="reader-panel" id="reader-panel">
+                            <div class="reader-scroll" id="reader-scroll">
+                                <div class="reading-state-placeholder" id="reading-placeholder">
+                                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                                        <path d="M8 6h32a3 3 0 013 3v30a3 3 0 01-3 3H8a3 3 0 01-3-3V9a3 3 0 013-3zm4 9h24m-24 7h24m-24 7h18m-18 6h20"/>
+                                    </svg>
+                                    <p>Select a section from the left to begin reading.</p>
+                                </div>
+                                <div class="reading-view hidden" id="reading-view">
+                                    <div class="section-header" id="section-header">
+                                        <div class="section-number" id="section-number"></div>
+                                        <h2 id="section-title"></h2>
+                                    </div>
+                                    <article class="section-body" id="section-content"></article>
+                                    <!-- AI Analysis -->
+                                    <div class="analysis-panel hidden" id="analysis-panel">
+                                        <!-- Explanation Card -->
+                                        <div class="analysis-card" id="explanation-card">
+                                            <div class="analysis-card-header">
+                                                <div class="analysis-card-icon analysis-card-icon--explain">
+                                                    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </div>
+                                                <h3>AI Explanation</h3>
+                                            </div>
+                                            <div class="analysis-card-body" id="ai-explanation">
+                                                <div class="skeleton-block">
+                                                    <div class="skeleton-line skeleton-line--full"></div>
+                                                    <div class="skeleton-line skeleton-line--80"></div>
+                                                    <div class="skeleton-line skeleton-line--60"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Critique Card -->
+                                        <div class="analysis-card" id="critique-card">
+                                            <div class="analysis-card-header">
+                                                <div class="analysis-card-icon analysis-card-icon--critique">
+                                                    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </div>
+                                                <h3>Critique &amp; Analysis</h3>
+                                            </div>
+                                            <div class="analysis-card-body markdown-body" id="ai-critique"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- ===== PDF View Panel ===== -->
+                    <div class="pdf-view-panel hidden" id="pdf-view-panel">
+                        <div class="pdf-toolbar">
+                            <span class="pdf-toolbar-filename" id="pdf-toolbar-filename">—</span>
+                            <div class="pdf-nav">
+                                <button class="pdf-nav-btn" id="pdf-prev">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                                </button>
+                                <span class="pdf-page-info"><span id="pdf-page-num">1</span> / <span id="pdf-page-count">1</span></span>
+                                <button class="pdf-nav-btn" id="pdf-next">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                                </button>
+                            </div>
+                            <div class="pdf-zoom-controls">
+                                <button class="pdf-nav-btn" id="pdf-zoom-out">−</button>
+                                <span class="pdf-zoom-label" id="pdf-zoom-label">100%</span>
+                                <button class="pdf-nav-btn" id="pdf-zoom-in">+</button>
+                            </div>
+                        </div>
+                        <div class="pdf-canvas-container" id="pdf-canvas-container">
+                            <canvas id="pdf-canvas"></canvas>
                         </div>
                     </div>
-                    <button class="chat-toggle-btn" id="chat-toggle-btn" aria-label="Toggle chat panel">
+
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ===== CHAT PANEL ===== -->
+        <section class="chat-panel" id="chat-panel">
+            <div class="chat-header" id="chat-header">
+                <div class="chat-header-left">
+                    <div class="chat-avatar">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd"
-                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                clip-rule="evenodd" />
+                            <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Research Assistant</h3>
+                        <span class="chat-status" id="chat-status">Ready</span>
+                    </div>
+                </div>
+                <div class="chat-header-actions">
+                    <button class="chat-clear-btn" id="chat-clear-btn" title="Clear chat history">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                    </button>
+                    <button class="chat-toggle-btn" id="chat-toggle-btn" aria-label="Toggle chat panel">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
                         </svg>
                     </button>
                 </div>
+            </div>
 
-                <div class="chat-history" id="chat-history">
-                    <div class="msg msg--bot" id="welcome-msg">
-                        <div class="msg-avatar">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <path
-                                    d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 4.5a1 1 0 11-2 0 1 1 0 012 0zM6.5 7A.5.5 0 017 6.5h1a.5.5 0 01.5.5v3.5a.5.5 0 01-1 0V7.5H7a.5.5 0 01-.5-.5z" />
-                            </svg>
-                        </div>
-                        <div class="msg-content">
-                            <p>Hello! I'm your AI research assistant. I can explain equations, check assumptions, and
-                                answer questions about your paper. <strong>Upload a PDF to get started.</strong></p>
-                        </div>
+            <div class="chat-history" id="chat-history">
+                <div class="msg msg--bot" id="welcome-msg">
+                    <div class="msg-avatar">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 4.5a1 1 0 11-2 0 1 1 0 012 0zM6.5 7A.5.5 0 017 6.5h1a.5.5 0 01.5.5v3.5a.5.5 0 01-1 0V7.5H7a.5.5 0 01-.5-.5z"/>
+                        </svg>
+                    </div>
+                    <div class="msg-content">
+                        <p>Hello! I'm your AI research assistant. Upload a PDF to start a session, then ask me anything about the paper.</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="chat-input-area" id="chat-input-area">
-                    <div class="chat-input-wrapper">
-                        <textarea id="chat-query" placeholder="Ask about this paper..."
-                            rows="1"></textarea>
-                        <button id="send-chat" aria-label="Send message">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                <path
-                                    d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                            </svg>
-                        </button>
-                    </div>
+            <div class="chat-input-area" id="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <textarea id="chat-query" placeholder="Ask about this paper..." rows="1"></textarea>
+                    <button id="send-chat" aria-label="Send message">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                        </svg>
+                    </button>
                 </div>
-            </section>
+            </div>
+        </section>
 
-        </main>
     </div>
 
     <!-- Upload Progress Overlay -->
     <div class="upload-overlay hidden" id="upload-overlay">
         <div class="upload-modal">
             <div class="upload-spinner">
-                <svg width="48" height="48" viewBox="0 0 48 48">
-                    <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(99,102,241,0.2)" stroke-width="4" />
-                    <circle cx="24" cy="24" r="20" fill="none" stroke="#6366f1" stroke-width="4"
-                        stroke-dasharray="31.4 94.2" stroke-linecap="round">
-                        <animateTransform attributeName="transform" type="rotate" from="0 24 24" to="360 24 24"
-                            dur="1s" repeatCount="indefinite" />
+                <svg width="52" height="52" viewBox="0 0 52 52">
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(99,102,241,0.15)" stroke-width="4"/>
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="url(#spin-grad)" stroke-width="4"
+                        stroke-dasharray="34 104" stroke-linecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 26 26" to="360 26 26"
+                            dur="0.9s" repeatCount="indefinite"/>
                     </circle>
+                    <defs>
+                        <linearGradient id="spin-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#a78bfa"/>
+                            <stop offset="100%" stop-color="#6366f1"/>
+                        </linearGradient>
+                    </defs>
                 </svg>
             </div>
             <h3 id="upload-status-title">Processing Paper</h3>
@@ -336,6 +508,10 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- PDF.js for in-browser PDF text extraction and rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <!-- Local engine: PDF parsing, sectioning, retrieval, Groq client -->
+    <script src="engine.js"></script>
     <script src="script.js"></script>
 </body>
 
